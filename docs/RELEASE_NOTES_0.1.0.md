@@ -12,14 +12,14 @@ developer, or an IT professional. I am simply someone who loves Linux.
 
 This is a personal project. It is far from perfect, and that is okay. I warmly
 welcome criticism, bug reports, ideas, and all kinds of feedback. I will be
-very happy to keep learning and improving it—with AI, of course. 😄
+very happy to keep learning and improving it—with AI, of course.
 
 Please send feedback through
 [GitHub Issues](https://github.com/dwiigoy/nobrain-linux/issues).
 
 You can also find me on Instagram:
 [@dwi.dot.yogi](https://www.instagram.com/dwi.dot.yogi/). DMs are always
-welcome—come talk about Linux! There is only one rule: **no brains allowed.** 😄
+welcome—come talk about Linux! There is only one rule: **no brains allowed.**
 
 That is the philosophy behind this project: **No Brain Required.**
 
