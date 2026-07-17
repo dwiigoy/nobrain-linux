@@ -5,6 +5,17 @@ First public pre-release of NoBrain Linux, based on runtime Build 144.
 NoBrain Linux runs a Void Linux ARM64 desktop on Android through PRoot and an
 Android-hosted X11 server. Root access is not required.
 
+## A Note from the Creator
+
+NoBrain Linux was created 100% with AI. I am not a programmer, a software
+developer, or an IT professional. I am simply someone who loves Linux.
+
+This is a personal project. It is far from perfect, and that is okay. I warmly
+welcome criticism, bug reports, ideas, and all kinds of feedback. I will be
+very happy to keep learning and improving it—with AI, of course. 😄
+
+That is the philosophy behind this project: **No Brain Required.**
+
 ## Included
 
 - Customized DWM desktop with nine workspaces and keyboard-controlled layouts.
