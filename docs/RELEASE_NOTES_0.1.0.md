@@ -17,6 +17,10 @@ very happy to keep learning and improving it—with AI, of course. 😄
 Please send feedback through
 [GitHub Issues](https://github.com/dwiigoy/nobrain-linux/issues).
 
+You can also find me on Instagram:
+[@dwi.dot.yogi](https://www.instagram.com/dwi.dot.yogi/). DMs are always
+welcome—come talk about Linux! There is only one rule: **no brains allowed.** 😄
+
 That is the philosophy behind this project: **No Brain Required.**
 
 ## Included
