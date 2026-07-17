@@ -52,7 +52,8 @@ mode is explicitly selected.
 ## Known Limitations
 
 - ARM64 and Android 9+ only.
-- Primarily tested on Nubia Neo 5G with Android 13.
+- Primarily tested on a Nubia Neo 5G with Android 13 and a Huawei MatePad 11.5
+  (2024).
 - First startup requires internet and may take time on a slow connection.
 - Linux GUI applications run through PRoot/X11; GPU and hardware video decode
   support are limited.

@@ -25,8 +25,8 @@ installation.
 > rule: **no brains allowed.**
 
 > **Release status:** `v0.1.0` is the first public pre-release. Build 144 was
-> tested primarily on a Nubia Neo 5G running Android 13. Other ARM64 devices
-> need broader testing.
+> tested primarily on a Nubia Neo 5G running Android 13 and a Huawei MatePad
+> 11.5 (2024). Other ARM64 devices need broader testing.
 
 ## Highlights
 
