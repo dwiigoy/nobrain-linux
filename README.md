@@ -11,6 +11,14 @@ and an Android-hosted X server into one application. It runs through PRoot, so
 the Android device does not need root access and ADB is not required after
 installation.
 
+> [!IMPORTANT]
+> **AI disclosure:** NoBrain Linux was created 100% with AI. Its creator is not
+> a programmer, a software developer, or an IT professional—just someone who
+> loves Linux. This is a personal project and it is far from perfect. Criticism,
+> bug reports, ideas, and all kinds of feedback are warmly welcomed. It will
+> keep improving—with AI, of course. That is the philosophy: **No Brain
+> Required.** 😄
+
 > **Release status:** `v0.1.0` is the first public pre-release. Build 144 was
 > tested primarily on a Nubia Neo 5G running Android 13. Other ARM64 devices
 > need broader testing.
