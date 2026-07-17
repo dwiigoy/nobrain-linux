@@ -1,0 +1,17 @@
+#!/bin/sh
+FIFO=/tmp/nobrain-cmd
+READY=/tmp/nobrain-session-ready
+
+rm -f "$READY" "$FIFO"
+mkfifo "$FIFO"
+chown 1000:1000 "$FIFO" 2>/dev/null || true
+chmod 666 "$FIFO" 2>/dev/null || true
+touch "$READY"
+trap 'rm -f "$READY" "$FIFO"' EXIT HUP INT TERM
+
+while true; do
+    if IFS= read -r cmd < "$FIFO"; then
+        [ -n "$cmd" ] || continue
+        /bin/sh -c "$cmd" &
+    fi
+done

@@ -1,0 +1,44 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.nobrain.linux'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.nobrain.panel"
+        minSdk 28
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+        // ARM64 only - no need for other ABIs
+        ndk { abiFilters 'arm64-v8a' }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            debuggable true
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // Allow large APK (rootfs bundled)
+    aaptOptions { cruncherEnabled false }
+
+    packagingOptions {
+        // Include native libs as-is
+        jniLibs { keepDebugSymbols.add("**/*.so") }
+    }
+}
+
+dependencies {
+}

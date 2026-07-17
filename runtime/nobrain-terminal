@@ -1,0 +1,51 @@
+#!/bin/sh
+_fs=$(python3 -c "
+import os
+f='/root/.config/nobrain-scale'
+try:
+    v=float(open(f).read().strip() or 100) if os.path.exists(f) else 100
+    if v <= 4:
+        v = 100
+    print(max(8, min(22, int(round(10 * v / 100.0)))))
+except:
+    print(10)
+" 2>/dev/null || echo 10)
+_stpx=$(python3 -c "
+import os
+f='/root/.config/nobrain-scale'
+try:
+    v=float(open(f).read().strip() or 0) if os.path.exists(f) else 0
+    dpi=int(96*v/100) if v>4 else 96
+    print(int(14*dpi/72))
+except:
+    print(18)
+" 2>/dev/null || echo 18)
+
+if command -v xterm >/dev/null 2>&1; then
+    exec xterm -xrm 'XTerm*VT100.Translations: #override 
+    Ctrl Shift <KeyPress>C: select-end(CLIPBOARD, CUT_BUFFER1) 
+    Ctrl Shift <KeyPress>V: insert-selection(CLIPBOARD, CUT_BUFFER1) 
+    Alt <KeyPress>C: select-end(CLIPBOARD, CUT_BUFFER1) 
+    Alt <KeyPress>V: insert-selection(CLIPBOARD, CUT_BUFFER1) 
+    Ctrl Alt <KeyPress>C: select-end(CLIPBOARD, CUT_BUFFER1) 
+    Ctrl Alt <KeyPress>V: insert-selection(CLIPBOARD, CUT_BUFFER1)' -T Terminal \
+        -fa "DejaVu Sans Mono" -fs "$_fs" \
+        -bg "#101418" -fg "#e8edf2" -cr "#e8edf2" -bd "#30363d" \
+        -sb -rightbar -sl 50000 -j -s -si -sk -aw "$@"
+fi
+
+if command -v tmux >/dev/null 2>&1; then
+    _tmux_conf=/tmp/nobrain-tmux.conf
+    cat > "$_tmux_conf" <<'TMUXEOF'
+set -g mouse on
+set -g history-limit 50000
+set -g status off
+set -g mode-keys vi
+bind -n WheelUpPane if -Ft= "#{mouse_any_flag}" "send-keys -M" "copy-mode -e"
+bind -n WheelDownPane if -Ft= "#{mouse_any_flag}" "send-keys -M" "send-keys -M"
+TMUXEOF
+    exec st -f "DejaVu Sans Mono:pixelsize=${_stpx}:antialias=true" \
+        -e tmux -f "$_tmux_conf" new-session
+fi
+
+exec st -f "DejaVu Sans Mono:pixelsize=${_stpx}:antialias=true" "$@"

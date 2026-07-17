@@ -1,0 +1,64 @@
+#!/bin/sh
+LOCK=/tmp/nobrain-menu.lock
+VISIBLE=/tmp/nobrain-menu-visible
+DONE=/tmp/nobrain-menu-done
+LOG=/tmp/nobrain-menu.log
+XBINDKEYS_LOG=/tmp/nobrain-xbindkeys.log
+xbindkeys_was_running=0
+cleaned=0
+
+if ! mkdir "$LOCK" 2>/dev/null; then
+    printf '%s duplicate ignored\n' "$(date -Iseconds 2>/dev/null || date)" >> "$LOG"
+    exit 0
+fi
+
+cleanup() {
+    [ "$cleaned" -eq 0 ] || return
+    cleaned=1
+    rm -f "$VISIBLE"
+    rmdir "$LOCK" 2>/dev/null || true
+    if [ "$xbindkeys_was_running" -eq 1 ] && command -v xbindkeys >/dev/null 2>&1 \
+            && ! pgrep -x xbindkeys >/dev/null 2>&1; then
+        DISPLAY=${DISPLAY:-127.0.0.1:4} \
+            xbindkeys -f /root/.xbindkeysrc >> "$XBINDKEYS_LOG" 2>&1
+        printf '%s xbindkeys restarted\n' \
+            "$(date -Iseconds 2>/dev/null || date)" >> "$LOG"
+    fi
+    touch "$DONE"
+}
+
+trap cleanup EXIT HUP INT TERM
+rm -f "$DONE"
+printf '%s start\n' "$(date -Iseconds 2>/dev/null || date)" >> "$LOG"
+
+# A stale xbindkeys instance can retain the active keyboard grab across an
+# Android-hosted X11 shutdown. Pause it while dmenu owns the keyboard, then
+# restore it in cleanup so clipboard and volume shortcuts remain available.
+if pgrep -x xbindkeys >/dev/null 2>&1; then
+    xbindkeys_was_running=1
+    pkill -x xbindkeys 2>/dev/null || true
+    stop_wait=0
+    while pgrep -x xbindkeys >/dev/null 2>&1 && [ "$stop_wait" -lt 50 ]; do
+        stop_wait=$((stop_wait+1))
+        sleep 0.01
+    done
+    printf '%s xbindkeys paused\n' \
+        "$(date -Iseconds 2>/dev/null || date)" >> "$LOG"
+fi
+
+/usr/local/bin/nobrain-menu-core &
+core_pid=$!
+visible_wait=0
+while kill -0 "$core_pid" 2>/dev/null && [ "$visible_wait" -lt 500 ]; do
+    if DISPLAY=${DISPLAY:-127.0.0.1:4} \
+            xdotool search --onlyvisible --class dmenu >/dev/null 2>&1; then
+        touch "$VISIBLE"
+        break
+    fi
+    visible_wait=$((visible_wait+1))
+    sleep 0.01
+done
+wait "$core_pid"
+ret=$?
+printf '%s done=%s\n' "$(date -Iseconds 2>/dev/null || date)" "$ret" >> "$LOG"
+exit "$ret"

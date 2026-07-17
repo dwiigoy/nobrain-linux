@@ -1,0 +1,50 @@
+# Android and Gradle output
+.gradle/
+**/build/
+android/local.properties
+
+# Release and signing material
+*.apk
+*.apks
+*.aab
+*.idsig
+*.jks
+*.keystore
+*.pem
+*.key
+
+# Rootfs and native build artifacts
+*.tar
+*.tar.gz
+*.tar.xz
+rootfs/staging/
+android/app/src/main/assets/rootfs.tar.gz
+android/app/src/main/jniLibs/
+!android/app/src/main/jniLibs/README.md
+native/termux-x11/app/src/main/cpp/build-*/
+
+# XLorie dependencies fetched from dependencies.lock
+native/termux-x11/app/src/main/cpp/bzip2/
+native/termux-x11/app/src/main/cpp/libepoxy/
+native/termux-x11/app/src/main/cpp/libfontenc/
+native/termux-x11/app/src/main/cpp/libtirpc/
+native/termux-x11/app/src/main/cpp/libx11/
+native/termux-x11/app/src/main/cpp/libxau/
+native/termux-x11/app/src/main/cpp/libxcvt/
+native/termux-x11/app/src/main/cpp/libxdmcp/
+native/termux-x11/app/src/main/cpp/libxfont/
+native/termux-x11/app/src/main/cpp/libxkbfile/
+native/termux-x11/app/src/main/cpp/libxshmfence/
+native/termux-x11/app/src/main/cpp/libxtrans/
+native/termux-x11/app/src/main/cpp/pixman/
+native/termux-x11/app/src/main/cpp/xkbcomp/
+native/termux-x11/app/src/main/cpp/xorgproto/
+native/termux-x11/app/src/main/cpp/xserver/
+
+# Local development
+__pycache__/
+*.pyc
+*.log
+*.swp
+.idea/
+.vscode/

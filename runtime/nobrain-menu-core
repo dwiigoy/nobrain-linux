@@ -1,0 +1,207 @@
+#!/bin/sh
+PINS=/root/.nobrain-pins
+ZOOM_CFG=/root/.config/nobrain-scale
+SCREEN_CFG=/root/.config/nobrain-screen-scale
+SHUTDOWN_FLAG=/tmp/nobrain-shutdown
+APPS_CACHE=/home/nobrain/.cache/nobrain-dmenu-apps
+D=127.0.0.1:4
+
+[ -f "$PINS" ] || printf "Terminal|nobrain-terminal\nSSH Access|nobrain-terminal -e sudo -n /usr/local/bin/nobrain-ssh-access\nBrowser|chromium\nWPS Writer|wps-writer\nWPS Spreadsheet|et\nWPS Presentation|wpp\n" > "$PINS"
+
+refresh_app_cache() {
+  mkdir -p "$(dirname "$APPS_CACHE")"
+  cache_tmp="${APPS_CACHE}.$$"
+  if (IFS=:; stest -flx $PATH) | sort -u > "$cache_tmp" \
+      && [ -s "$cache_tmp" ]; then
+    mv -f "$cache_tmp" "$APPS_CACHE"
+  else
+    rm -f "$cache_tmp"
+    return 1
+  fi
+}
+
+if [ "$1" = "--refresh-cache" ]; then
+  refresh_app_cache
+  exit $?
+fi
+
+[ -s "$APPS_CACHE" ] || refresh_app_cache
+(sleep 1; refresh_app_cache) >/dev/null 2>&1 &
+
+build_pinlist() {
+  num=1
+  while IFS="|" read -r label cmd; do
+    [ -z "$label" ] && continue
+    printf "%s %s\n" "$num" "$label"
+    num=$((num+1))
+  done < "$PINS"
+}
+
+pin_cmd()   { sed -n "${1}p" "$PINS" | cut -d"|" -f2; }
+pin_label() { sed -n "${1}p" "$PINS" | cut -d"|" -f1; }
+pin_count() { grep -c "|" "$PINS" 2>/dev/null || echo 0; }
+
+ui_zoom_for_screen() {
+  awk -v raw="$1" 'BEGIN {
+    v = raw + 0
+    if (v <= 0) v = 100
+    if (v <= 1) v *= 100
+    if (v < 50) v = 50
+    if (v > 100) v = 100
+    zoom = int(10000 / v + 0.5)
+    if (zoom < 100) zoom = 100
+    if (zoom > 300) zoom = 300
+    print zoom
+  }'
+}
+
+_scale_values=$(awk -v raw="$(head -n 1 "$SCREEN_CFG" 2>/dev/null)" 'BEGIN {
+  v = raw + 0
+  if (v <= 0) v = 100
+  if (v <= 1) v *= 100
+  scale = int(v + 0.5)
+  if (scale < 50) scale = 50
+  if (scale > 100) scale = 100
+  zoom = int(10000 / scale + 0.5)
+  if (zoom < 100) zoom = 100
+  if (zoom > 300) zoom = 300
+  dpi = int(96 * zoom / 100)
+  font = int(14 * dpi / 72)
+  printf "%d %d %d %d\n", scale, zoom, dpi, font
+}')
+set -- $_scale_values
+_screen_scale=$1
+_zoom=$2
+_dpi=$3
+_fontpx=$4
+_dmfn="DejaVu Sans Mono:pixelsize=${_fontpx}:antialias=true"
+
+open_main_menu() {
+  {
+    printf "0 Manage Pins\nScreen Scaling ($_screen_scale%%)\nShutdown\n"
+    build_pinlist
+    cat "$APPS_CACHE" | grep -v "^\\["
+  } | DISPLAY=$D dmenu -fn "$_dmfn" -i -l 20 -p "Open:"
+}
+
+_dmenu_error=/tmp/nobrain-menu-error.$$
+_attempt=0
+while :; do
+  : > "$_dmenu_error"
+  choice=$(open_main_menu 2>"$_dmenu_error")
+  ret=$?
+  if grep -q "cannot grab keyboard" "$_dmenu_error" && [ "$_attempt" -lt 4 ]; then
+    cat "$_dmenu_error" >&2
+    _attempt=$((_attempt+1))
+    sleep 0.1
+    continue
+  fi
+  [ -s "$_dmenu_error" ] && cat "$_dmenu_error" >&2
+  break
+done
+rm -f "$_dmenu_error"
+
+[ "$ret" -eq 0 ] || exit "$ret"
+[ -z "$choice" ] && exit
+
+selnum=$(printf "%s" "$choice" | grep -oE "^[0-9]+")
+maxpin=$(pin_count)
+
+if [ -n "$selnum" ] && [ "$selnum" -ge 1 ] && [ "$selnum" -le "$maxpin" ] 2>/dev/null; then
+  cmd=$(pin_cmd "$selnum")
+  [ -n "$cmd" ] && DISPLAY=$D $cmd &
+  exit
+fi
+
+case "$choice" in
+  Shutdown)
+    printf "" | DISPLAY=$D dmenu -fn "$_dmfn" -p "Shutting down..."
+    pkill -9 -x chromium 2>/dev/null
+    pkill -9 -x firefox 2>/dev/null
+    pkill -9 -x xterm 2>/dev/null
+    pkill -9 -x tmux 2>/dev/null
+    pkill -9 -x st 2>/dev/null
+    pkill -9 -x wps 2>/dev/null
+    pkill -9 -x et 2>/dev/null
+    pkill -9 -x wpp 2>/dev/null
+    pkill -9 -x python3 2>/dev/null
+    pkill -9 -x xbindkeys 2>/dev/null
+    pkill -9 -x sshd 2>/dev/null
+    pkill -9 -x pulseaudio 2>/dev/null
+    pkill -9 -x dwm 2>/dev/null
+    sleep 0.3
+    touch "$SHUTDOWN_FLAG"
+    exit
+    ;;
+  Screen\ Scaling*)
+    new_scale=$(printf "%s" "$_screen_scale" | DISPLAY=$D dmenu -fn "$_dmfn" -p "Screen % (50-100; 65 Tiny):")
+    [ -z "$new_scale" ] && exit
+    validated=$(printf "%s" "$new_scale" | python3 -c "
+import sys
+try:
+    v = float(sys.stdin.read().strip())
+    if v <= 1:
+        v *= 100
+    v = max(50, min(100, int(round(v))))
+    print(v)
+except:
+    pass
+")
+    if [ -z "$validated" ]; then
+      printf "Invalid: %s" "$new_scale" | DISPLAY=$D dmenu -fn "$_dmfn" -p "Error (50-100):"
+      exit
+    fi
+    ui_zoom=$(ui_zoom_for_screen "$validated")
+    mkdir -p "$(dirname "$SCREEN_CFG")"
+    printf "%s\n" "$validated" > "$SCREEN_CFG"
+    printf "%s\n" "$ui_zoom" > "$ZOOM_CFG"
+    new_dpi=$((96 * ui_zoom / 100))
+    printf "Screen ${validated}%% saved. UI ${ui_zoom}%%, DPI ${new_dpi}. Use Shutdown, then reopen NoBrain." | DISPLAY=$D dmenu -fn "$_dmfn" -p "Restart required:"
+    ;;
+  "0 Manage Pins"|0)
+    action=$(printf "Add\nEdit\nRemove" | DISPLAY=$D dmenu -fn "$_dmfn" -i -l 5 -p "Manage Pins:")
+    case "$action" in
+      Add)
+        label=$(printf "" | DISPLAY=$D dmenu -fn "$_dmfn" -p "Label:")
+        [ -z "$label" ] && exit
+        cmd=$(cat "$APPS_CACHE" | grep -v "^\\[" | DISPLAY=$D dmenu -fn "$_dmfn" -l 20 -p "Command:")
+        [ -z "$cmd" ] && exit
+        printf "%s|%s\n" "$label" "$cmd" >> "$PINS"
+        ;;
+      Edit)
+        sel=$(build_pinlist | DISPLAY=$D dmenu -fn "$_dmfn" -i -l 10 -p "Edit which:")
+        [ -z "$sel" ] && exit
+        selnum=$(printf "%s" "$sel" | grep -oE "^[0-9]+")
+        cur_label=$(pin_label "$selnum")
+        cur_cmd=$(pin_cmd "$selnum")
+        new_label=$(printf "" | DISPLAY=$D dmenu -fn "$_dmfn" -p "Label [$cur_label]:")
+        [ -z "$new_label" ] && new_label="$cur_label"
+        new_cmd=$( { printf "%s\n" "$cur_cmd"; cat "$APPS_CACHE" | grep -v "^\\[" | grep -v "^$cur_cmd$"; } \
+          | DISPLAY=$D dmenu -fn "$_dmfn" -i -l 20 -p "Command:")
+        [ -z "$new_cmd" ] && new_cmd="$cur_cmd"
+        python3 - "$PINS" "$selnum" "$new_label" "$new_cmd" << 'PYEOF'
+import sys
+f, n, l, c = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4]
+lines = open(f).readlines()
+lines[n-1] = l + "|" + c + "\n"
+open(f, "w").writelines(lines)
+PYEOF
+        ;;
+      Remove)
+        sel=$(build_pinlist | DISPLAY=$D dmenu -fn "$_dmfn" -i -l 10 -p "Remove which:")
+        [ -z "$sel" ] && exit
+        selnum=$(printf "%s" "$sel" | grep -oE "^[0-9]+")
+        python3 - "$PINS" "$selnum" << 'PYEOF'
+import sys
+f, n = sys.argv[1], int(sys.argv[2])
+lines = open(f).readlines()
+del lines[n-1]
+open(f, "w").writelines(lines)
+PYEOF
+        ;;
+    esac
+    ;;
+  *)
+    [ -n "$choice" ] && DISPLAY=$D $choice &
+    ;;
+esac

@@ -1,0 +1,539 @@
+#!/bin/sh
+set -eu
+
+KEY_DIR=/root/.ssh
+KEY=$KEY_DIR/nobrain_client_ed25519
+AUTH_DIR=/etc/ssh/authorized_keys
+AUTH=$AUTH_DIR/nobrain
+LEGACY_ROOT_AUTH=$AUTH_DIR/root
+EXPORT_DIR=/sdcard/Download/NoBrain-SSH
+IMPORT_KEYS=$EXPORT_DIR/authorized_keys
+IMPORT_CONFIG=$EXPORT_DIR/sshd_config
+CONFIG_DIR=/root/.config/nobrain/ssh
+CONFIG=$CONFIG_DIR/sshd_config
+MODE=$CONFIG_DIR/mode
+WORK_CONFIG=$CONFIG_DIR/sshd_config.edit
+BACKUP_CONFIG=$CONFIG_DIR/sshd_config.backup
+BACKUP_MODE=$CONFIG_DIR/mode.backup
+LEGACY_CONFIG=/etc/ssh/sshd_config.nobrain
+PASSWORD_STATE=/etc/nobrain-user-password-state
+
+pause() {
+    printf '\nPress Enter to continue...'
+    read -r _pause
+}
+
+write_key_config() {
+    cat > "$1" <<'EOF'
+Port 2223
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PermitRootLogin no
+AllowUsers nobrain
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+StrictModes no
+UsePAM no
+PidFile /tmp/sshd.pid
+EOF
+}
+
+write_password_config() {
+    cat > "$1" <<'EOF'
+Port 2223
+PubkeyAuthentication no
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+AuthenticationMethods password
+PermitRootLogin no
+AllowUsers nobrain
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+StrictModes no
+UsePAM no
+PidFile /tmp/sshd.pid
+EOF
+}
+
+write_build140_key_config() {
+    cat > "$1" <<'EOF'
+Port 2223
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PermitRootLogin prohibit-password
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+StrictModes no
+UsePAM no
+PidFile /tmp/sshd.pid
+EOF
+}
+
+write_build140_password_config() {
+    cat > "$1" <<'EOF'
+Port 2223
+PubkeyAuthentication no
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+AuthenticationMethods password
+PermitRootLogin yes
+AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+StrictModes no
+UsePAM no
+PidFile /tmp/sshd.pid
+EOF
+}
+
+detect_mode() {
+    if [ -s "$MODE" ]; then
+        head -n 1 "$MODE"
+    else
+        printf 'custom\n'
+    fi
+}
+
+config_ports() {
+    /usr/bin/sshd -T -f "$1" 2>/dev/null \
+        | awk '$1 == "port" && !seen[$2]++ { printf "%s%s", sep, $2; sep="," } END { print "" }'
+}
+
+sync_legacy_config() {
+    install -m 600 "$CONFIG" "$LEGACY_CONFIG"
+}
+
+sync_authorized_keys() {
+    install -m 600 "$AUTH" "$KEY_DIR/authorized_keys"
+    chown 1000:1000 "$KEY_DIR/authorized_keys" 2>/dev/null || true
+}
+
+listener_pid() {
+    _pidfile=$(/usr/bin/sshd -T -f "$CONFIG" 2>/dev/null \
+        | awk '$1 == "pidfile" { print $2; exit }')
+    [ -n "$_pidfile" ] || _pidfile=/tmp/sshd.pid
+    cat "$_pidfile" 2>/dev/null || true
+}
+
+wait_for_listener() {
+    _pid=$1
+    _wait=0
+    while [ "$_wait" -lt 20 ]; do
+        kill -0 "$_pid" 2>/dev/null || return 1
+        _wait=$((_wait + 1))
+        sleep 0.1
+    done
+}
+
+check_new_ports() {
+    _candidate=$1
+    _current_ports=$(config_ports "$CONFIG" 2>/dev/null || true)
+    _candidate_ports=$(config_ports "$_candidate")
+    [ -n "$_candidate_ports" ] || {
+        printf 'Configuration does not expose an SSH port.\n' >&2
+        return 1
+    }
+    _old_ifs=$IFS
+    IFS=,
+    for _port in $_candidate_ports; do
+        case ",$_current_ports," in
+            *",$_port,"*) continue ;;
+        esac
+        if ! python3 - "$_port" <<'PY'
+import socket, sys
+port = int(sys.argv[1])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("0.0.0.0", port))
+finally:
+    s.close()
+PY
+        then
+            IFS=$_old_ifs
+            printf 'Port %s cannot be opened in this Android environment.\n' "$_port" >&2
+            return 1
+        fi
+    done
+    IFS=$_old_ifs
+}
+
+apply_config() {
+    _candidate=$1
+    _new_mode=$2
+    if ! /usr/bin/sshd -t -f "$_candidate"; then
+        printf 'SSH configuration validation failed; nothing changed.\n' >&2
+        return 1
+    fi
+    check_new_ports "$_candidate" || return 1
+    _pid=$(listener_pid)
+
+    [ -s "$CONFIG" ] && install -m 600 "$CONFIG" "$BACKUP_CONFIG"
+    [ -s "$MODE" ] && install -m 600 "$MODE" "$BACKUP_MODE"
+    install -m 600 "$_candidate" "$CONFIG"
+    printf '%s\n' "$_new_mode" > "$MODE"
+    chmod 600 "$MODE"
+    sync_legacy_config
+
+    if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        kill -HUP "$_pid"
+        if ! wait_for_listener "$_pid"; then
+            printf 'New listener failed; restoring the previous configuration.\n' >&2
+            restore_backup_internal || true
+            return 1
+        fi
+    else
+        /usr/bin/sshd -f "$CONFIG"
+    fi
+    printf 'SSH mode: %s; port(s): %s\n' "$_new_mode" "$(config_ports "$CONFIG")"
+}
+
+restore_backup_internal() {
+    [ -s "$BACKUP_CONFIG" ] || return 1
+    install -m 600 "$BACKUP_CONFIG" "$CONFIG"
+    if [ -s "$BACKUP_MODE" ]; then
+        install -m 600 "$BACKUP_MODE" "$MODE"
+    else
+        printf 'custom\n' > "$MODE"
+    fi
+    sync_legacy_config
+    _pid=$(listener_pid)
+    if [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null; then
+        kill -HUP "$_pid" 2>/dev/null || true
+    else
+        /usr/bin/sshd -f "$CONFIG"
+    fi
+}
+
+ensure_bootstrap() {
+    _created=0
+    if [ ! -s "$KEY" ] || [ ! -s "$KEY.pub" ]; then
+        rm -f "$KEY" "$KEY.pub"
+        ssh-keygen -q -t ed25519 -N '' -C 'nobrain-per-install' -f "$KEY"
+        _created=1
+    fi
+    if [ ! -s "$AUTH" ]; then
+        install -m 600 "$KEY.pub" "$AUTH"
+    elif [ "$_created" -eq 1 ]; then
+        _merged=$AUTH.bootstrap.$$
+        { cat "$AUTH"; cat "$KEY.pub"; } | awk 'NF && !seen[$0]++' > "$_merged"
+        install -m 600 "$_merged" "$AUTH"
+        rm -f "$_merged"
+    fi
+    sync_authorized_keys
+}
+
+show_status() {
+    printf 'Login user: nobrain\n'
+    printf 'Mode: %s\n' "$(detect_mode)"
+    if /usr/bin/sshd -t -f "$CONFIG" >/dev/null 2>&1; then
+        printf 'Configuration: valid\n'
+        printf 'Port(s): %s\n' "$(config_ports "$CONFIG")"
+    else
+        printf 'Configuration: INVALID\n'
+    fi
+    printf 'Authorized keys: '
+    awk 'NF && $1 !~ /^#/ { count++ } END { print count + 0 }' "$AUTH" 2>/dev/null \
+        || printf '0\n'
+    if [ -s "$KEY.pub" ]; then
+        printf 'Bootstrap fingerprint: '
+        ssh-keygen -lf "$KEY.pub" | awk '{print $2 " " $4}'
+    else
+        printf 'Bootstrap key: not stored\n'
+    fi
+    if [ -s "$EXPORT_DIR/nobrain_ed25519" ]; then
+        printf 'Shared private-key export: PRESENT\n'
+    else
+        printf 'Shared private-key export: absent\n'
+    fi
+}
+
+export_bootstrap() {
+    if [ ! -s "$KEY" ] || [ ! -s "$KEY.pub" ]; then
+        printf 'Bootstrap key is not stored. Rotate it first.\n' >&2
+        return 1
+    fi
+    mkdir -p "$EXPORT_DIR"
+    install -m 600 "$KEY" "$EXPORT_DIR/nobrain_ed25519"
+    install -m 644 "$KEY.pub" "$EXPORT_DIR/nobrain_ed25519.pub"
+    printf 'Key exported to %s/nobrain_ed25519\n' "$EXPORT_DIR"
+}
+
+valid_key_file() {
+    [ -s "$1" ] && ssh-keygen -lf "$1" >/dev/null 2>&1
+}
+
+filter_import_keys() {
+    awk '
+        $1 ~ /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh.com)$/ &&
+        $2 ~ /^[A-Za-z0-9+\/=]+$/ { print }
+    ' "$IMPORT_KEYS"
+}
+
+import_authorized_keys() {
+    if [ ! -s "$IMPORT_KEYS" ]; then
+        printf 'Place authorized_keys at %s first.\n' "$IMPORT_KEYS" >&2
+        return 1
+    fi
+    _incoming=$AUTH.incoming.$$
+    filter_import_keys > "$_incoming"
+    if ! valid_key_file "$_incoming"; then
+        rm -f "$_incoming"
+        printf 'No valid OpenSSH public keys found.\n' >&2
+        return 1
+    fi
+    printf 'Imported fingerprints:\n'
+    ssh-keygen -lf "$_incoming"
+    printf '\n1. Append to authorized keys\n2. Replace authorized keys\nb. Back\nSelect: '
+    read -r _import_mode
+    case "$_import_mode" in
+        1)
+            _merged=$AUTH.merged.$$
+            { cat "$AUTH" 2>/dev/null || true; cat "$_incoming"; } \
+                | awk 'NF && !seen[$0]++' > "$_merged"
+            install -m 600 "$_merged" "$AUTH"
+            rm -f "$_merged"
+            ;;
+        2)
+            install -m 600 "$_incoming" "$AUTH"
+            if [ -s "$KEY.pub" ]; then
+                set -- $(awk 'NR == 1 { print $1, $2 }' "$KEY.pub")
+                if ! awk -v t="$1" -v k="$2" '$1 == t && $2 == k { found=1 } END { exit !found }' "$AUTH"; then
+                    rm -f "$KEY" "$KEY.pub"
+                fi
+            fi
+            ;;
+        b|B) rm -f "$_incoming"; return 0 ;;
+        *) rm -f "$_incoming"; printf 'Unknown selection.\n'; return 1 ;;
+    esac
+    rm -f "$_incoming"
+    sync_authorized_keys
+    _pid=$(listener_pid)
+    [ -z "$_pid" ] || kill -HUP "$_pid" 2>/dev/null || true
+    printf 'Authorized keys updated.\n'
+}
+
+rotate_bootstrap() {
+    printf 'Type ROTATE to replace the NoBrain bootstrap key: '
+    read -r _confirm
+    [ "$_confirm" = ROTATE ] || { printf 'Cancelled.\n'; return 0; }
+
+    _old_type=
+    _old_data=
+    if [ -s "$KEY.pub" ]; then
+        set -- $(awk 'NR == 1 { print $1, $2 }' "$KEY.pub")
+        _old_type=$1
+        _old_data=$2
+    fi
+    _new=$KEY.new.$$
+    _new_auth=$AUTH.new.$$
+    rm -f "$_new" "$_new.pub" "$_new_auth"
+    ssh-keygen -q -t ed25519 -N '' -C 'nobrain-per-install' -f "$_new"
+    if [ -n "$_old_data" ]; then
+        awk -v t="$_old_type" -v k="$_old_data" \
+            '!( $1 == t && $2 == k )' "$AUTH" 2>/dev/null > "$_new_auth" || true
+    else
+        cat "$AUTH" 2>/dev/null > "$_new_auth" || true
+    fi
+    cat "$_new.pub" >> "$_new_auth"
+    install -m 600 "$_new" "$KEY"
+    install -m 644 "$_new.pub" "$KEY.pub"
+    install -m 600 "$_new_auth" "$AUTH"
+    sync_authorized_keys
+    rm -f "$_new" "$_new.pub" "$_new_auth"
+    rm -f "$EXPORT_DIR/nobrain_ed25519" "$EXPORT_DIR/nobrain_ed25519.pub"
+    _pid=$(listener_pid)
+    [ -z "$_pid" ] || kill -HUP "$_pid" 2>/dev/null || true
+    printf 'Bootstrap rotated. Imported client keys were preserved.\n'
+}
+
+key_menu() {
+    ensure_bootstrap
+    _candidate=$CONFIG_DIR/key.$$.conf
+    write_key_config "$_candidate"
+    if ! apply_config "$_candidate" key; then
+        rm -f "$_candidate"
+        pause
+        return
+    fi
+    rm -f "$_candidate"
+    while :; do
+        clear 2>/dev/null || true
+        printf 'SSH Access - Key (secure, recommended)\n\n'
+        printf '1. Status\n2. Export key\n3. Import authorized_keys\n'
+        printf '4. Rotate key\n5. Remove exported private key\nb. Back\n\nSelect: '
+        read -r _choice
+        case "$_choice" in
+            1) show_status; pause ;;
+            2) export_bootstrap || true; pause ;;
+            3) import_authorized_keys || true; pause ;;
+            4) rotate_bootstrap || true; pause ;;
+            5)
+                rm -f "$EXPORT_DIR/nobrain_ed25519"
+                printf 'Exported private key removed.\n'
+                pause
+                ;;
+            b|B) return ;;
+            *) printf 'Unknown selection.\n'; pause ;;
+        esac
+    done
+}
+
+password_mode() {
+    _password_status=$(passwd -S nobrain 2>/dev/null | awk '{print $2}')
+    printf 'Password SSH is reachable from the network.\n'
+    printf 'Change the default with: passwd nobrain\n\n'
+    if [ "$_password_status" = P ]; then
+        printf 'A nobrain password already exists.\n\n'
+        printf '1. Use existing password\n2. Change password\nb. Back\nSelect: '
+        read -r _choice
+        case "$_choice" in
+            1) : ;;
+            2) passwd nobrain || { printf 'Password was not changed.\n'; pause; return; } ;;
+            b|B) return ;;
+            *) printf 'Unknown selection.\n'; pause; return ;;
+        esac
+    else
+        printf 'Set a nobrain password before enabling password-only SSH.\n'
+        passwd nobrain || { printf 'Password setup failed; SSH mode was not changed.\n'; pause; return; }
+    fi
+    printf 'user-set\n' > "$PASSWORD_STATE"
+    chmod 600 "$PASSWORD_STATE"
+    _candidate=$CONFIG_DIR/password.$$.conf
+    write_password_config "$_candidate"
+    apply_config "$_candidate" password || true
+    rm -f "$_candidate"
+    pause
+}
+
+custom_menu() {
+    [ -s "$WORK_CONFIG" ] || install -m 600 "$CONFIG" "$WORK_CONFIG"
+    while :; do
+        clear 2>/dev/null || true
+        printf 'SSH Access - Custom\nActive port(s): %s\n\n' "$(config_ports "$CONFIG" 2>/dev/null || printf 'invalid')"
+        printf '1. Edit working configuration\n'
+        printf '2. Import configuration from sdcard\n'
+        printf '3. Export active configuration to sdcard\n'
+        printf '4. Validate and apply working configuration\n'
+        printf '5. Restore previous backup\n'
+        printf 'b. Back\n\nSelect: '
+        read -r _choice
+        case "$_choice" in
+            1)
+                "${EDITOR:-vi}" "$WORK_CONFIG" || true
+                ;;
+            2)
+                if [ -s "$IMPORT_CONFIG" ]; then
+                    install -m 600 "$IMPORT_CONFIG" "$WORK_CONFIG"
+                    printf 'Imported into the working configuration.\n'
+                else
+                    printf 'Place sshd_config at %s first.\n' "$IMPORT_CONFIG"
+                fi
+                pause
+                ;;
+            3)
+                mkdir -p "$EXPORT_DIR"
+                install -m 600 "$CONFIG" "$EXPORT_DIR/sshd_config"
+                printf 'Active configuration exported to %s/sshd_config\n' "$EXPORT_DIR"
+                pause
+                ;;
+            4)
+                apply_config "$WORK_CONFIG" custom || true
+                pause
+                ;;
+            5)
+                if restore_backup_internal; then
+                    install -m 600 "$CONFIG" "$WORK_CONFIG"
+                    printf 'Previous configuration restored.\n'
+                else
+                    printf 'No previous backup is available.\n'
+                fi
+                pause
+                ;;
+            b|B) return ;;
+            *) printf 'Unknown selection.\n'; pause ;;
+        esac
+    done
+}
+
+migrate_managed_config() {
+    _managed_mode=$(detect_mode)
+    case "$_managed_mode" in
+        key|password) ;;
+        *) return ;;
+    esac
+
+    _current_template=$CONFIG_DIR/current.$$.conf
+    _old_template=$CONFIG_DIR/build140.$$.conf
+    if [ "$_managed_mode" = key ]; then
+        write_key_config "$_current_template"
+        write_build140_key_config "$_old_template"
+    else
+        write_password_config "$_current_template"
+        write_build140_password_config "$_old_template"
+    fi
+
+    if cmp -s "$CONFIG" "$_old_template"; then
+        install -m 600 "$_current_template" "$CONFIG"
+    elif ! cmp -s "$CONFIG" "$_current_template"; then
+        printf 'custom\n' > "$MODE"
+    fi
+    rm -f "$_current_template" "$_old_template"
+}
+
+initialize_state() {
+    mkdir -p "$KEY_DIR" "$AUTH_DIR" "$CONFIG_DIR"
+    chmod 700 "$KEY_DIR" "$AUTH_DIR" "$CONFIG_DIR"
+    if [ ! -s "$AUTH" ] && [ -s "$LEGACY_ROOT_AUTH" ]; then
+        install -m 600 "$LEGACY_ROOT_AUTH" "$AUTH"
+    fi
+    if [ ! -s "$CONFIG" ]; then
+        if [ -s "$LEGACY_CONFIG" ]; then
+            install -m 600 "$LEGACY_CONFIG" "$CONFIG"
+            _key=$CONFIG_DIR/key.$$.conf
+            _old_key=$CONFIG_DIR/build140-key.$$.conf
+            _password=$CONFIG_DIR/password.$$.conf
+            _old_password=$CONFIG_DIR/build140-password.$$.conf
+            write_key_config "$_key"
+            write_build140_key_config "$_old_key"
+            write_password_config "$_password"
+            write_build140_password_config "$_old_password"
+            if cmp -s "$CONFIG" "$_key" || cmp -s "$CONFIG" "$_old_key"; then
+                printf 'key\n' > "$MODE"
+            elif cmp -s "$CONFIG" "$_password" || cmp -s "$CONFIG" "$_old_password"; then
+                printf 'password\n' > "$MODE"
+            else
+                printf 'custom\n' > "$MODE"
+            fi
+            rm -f "$_key" "$_old_key" "$_password" "$_old_password"
+        else
+            write_key_config "$CONFIG"
+            printf 'key\n' > "$MODE"
+        fi
+    fi
+    [ -s "$MODE" ] || printf 'custom\n' > "$MODE"
+    migrate_managed_config
+    chmod 600 "$CONFIG" "$MODE"
+    sync_legacy_config
+}
+
+initialize_state
+
+while :; do
+    clear 2>/dev/null || true
+    printf 'NoBrain SSH Access\nCurrent mode: %s\n\n' "$(detect_mode)"
+    printf '1. Key (secure, recommended)\n'
+    printf '2. Password\n'
+    printf '3. Custom\n'
+    printf 'q. Close\n\n'
+    printf 'Select: '
+    read -r choice
+    case "$choice" in
+        1) key_menu ;;
+        2) password_mode ;;
+        3) custom_menu ;;
+        q|Q) exit 0 ;;
+        *) printf 'Unknown selection.\n'; pause ;;
+    esac
+done

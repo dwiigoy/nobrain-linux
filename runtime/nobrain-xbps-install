@@ -1,0 +1,66 @@
+#!/bin/bash
+export TMPDIR=/tmp
+unset PROOT_TMP_DIR
+chmod 1777 /tmp /var/tmp 2>/dev/null || true
+
+[ -x /usr/local/lib/nobrain-xbps-metadata-fix.sh ] \
+    && /usr/local/lib/nobrain-xbps-metadata-fix.sh >/dev/null 2>&1
+
+log=/tmp/nobrain-xbps-$$.log
+system_update=0
+for arg in "$@"; do
+    case "$arg" in
+        --update|-*u*) system_update=1 ;;
+    esac
+done
+
+run_xbps() {
+    rm -f "$log"
+    /usr/bin/xbps-install "$@" 2>&1 | tee "$log"
+    ret=${PIPESTATUS[0]}
+}
+
+retryable() {
+    grep -Eiq \
+        'failed to download|Input/output error|Operation timed out|Connection (reset|timed out)|Temporary failure|SCRIPT failed to execute' \
+        "$log"
+}
+
+run_xbps "$@"
+n=0
+while [ "$ret" -ne 0 ] && [ "$n" -lt 2 ] && retryable; do
+    n=$((n + 1))
+    printf 'NoBrain: xbps failed; retry %s/2 in 2 seconds...\n' "$n" >&2
+    sleep 2
+    run_xbps -y "$@"
+done
+
+rm -f "$log"
+python3 /usr/local/lib/nobrain-pkgdb-fix.py >/dev/null 2>&1
+
+if [ "$ret" -eq 0 ] && [ "$(id -u)" -eq 0 ]; then
+    # Package upgrades replace these files without their PRoot runtime modes.
+    chmod 4755 /usr/bin/su /bin/su /usr/bin/sudo 2>/dev/null || true
+    chown 0:0 /etc/sudo.conf /etc/sudoers 2>/dev/null || true
+
+    if [ "$system_update" -eq 1 ]; then
+        ssh_reloaded=0
+        sshd_config=/root/.config/nobrain/ssh/sshd_config
+        [ -s "$sshd_config" ] || sshd_config=/etc/ssh/sshd_config.nobrain
+        sshd_pidfile=$(/usr/bin/sshd -T -f "$sshd_config" 2>/dev/null \
+            | awk '$1 == "pidfile" { print $2; exit }')
+        [ -n "$sshd_pidfile" ] || sshd_pidfile=/tmp/sshd.pid
+        sshd_pid=$(cat "$sshd_pidfile" 2>/dev/null)
+        if [ -n "$sshd_pid" ] && kill -0 "$sshd_pid" 2>/dev/null \
+                && /usr/bin/sshd -t -f "$sshd_config" \
+                && kill -HUP "$sshd_pid" 2>/dev/null; then
+            ssh_reloaded=1
+            printf 'NoBrain: SSH reloaded after system update.\n'
+        fi
+        if [ "$ssh_reloaded" -ne 1 ]; then
+            printf 'NoBrain: SSH may be unavailable. Use nobrain-menu -> Shutdown, then reopen NoBrain.\n' >&2
+        fi
+    fi
+fi
+
+exit "$ret"

@@ -1,0 +1,17 @@
+# path|repository|commit
+app/src/main/cpp/bzip2|https://gitlab.com/bzip2/bzip2.git|6a8690fc8d26c815e798c588f796eabe9d684cf0
+app/src/main/cpp/libepoxy|https://github.com/anholt/libepoxy|c84bc9459357a40e46e2fec0408d04fbdde2c973
+app/src/main/cpp/libfontenc|https://gitlab.freedesktop.org/xorg/lib/libfontenc.git|780d1f6f192a331de7b298a96e23ebc44d2a884b
+app/src/main/cpp/libtirpc|https://github.com/alisw/libtirpc|5ca4ca92f629d9d83e83544b9239abaaacf0a527
+app/src/main/cpp/libx11|https://gitlab.freedesktop.org/xorg/lib/libx11.git|6c75545a1deb51f5903992c52af6bc35cc9bc103
+app/src/main/cpp/libxau|https://gitlab.freedesktop.org/xorg/lib/libxau.git|a9c65683e68b3a4349afee5d7673b393fb924d2e
+app/src/main/cpp/libxcvt|https://gitlab.freedesktop.org/xorg/lib/libxcvt.git|dd8631c61465cc0de5e476c7a98e56528d62b163
+app/src/main/cpp/libxdmcp|https://gitlab.freedesktop.org/xorg/lib/libxdmcp.git|1192d3bc407348ff316bd3bffc791b3ac73f591b
+app/src/main/cpp/libxfont|https://gitlab.freedesktop.org/xorg/lib/libxfont.git|2c2e44c94ef17ecd5003a173237b57b315e28d93
+app/src/main/cpp/libxkbfile|https://gitlab.freedesktop.org/xorg/lib/libxkbfile.git|42e5dedd7fd3c7c73f3870a8751893c03c1afc69
+app/src/main/cpp/libxshmfence|https://gitlab.freedesktop.org/xorg/lib/libxshmfence.git|89f064748554e11832a3ec783945e1f4c7fe846e
+app/src/main/cpp/libxtrans|https://gitlab.freedesktop.org/xorg/lib/libxtrans.git|cf05ba4a10c90da2c63805a5375e983b174e28b0
+app/src/main/cpp/pixman|https://gitlab.freedesktop.org/pixman/pixman.git|9cc163c9da0fb4da430641715313d95a6ec466d9
+app/src/main/cpp/xkbcomp|https://gitlab.freedesktop.org/xorg/app/xkbcomp.git|2c7789785981ad1fce3858c726615b49293f7de0
+app/src/main/cpp/xorgproto|https://gitlab.freedesktop.org/xorg/proto/xorgproto.git|c18d2bc22813793bba7f0e4e603c0104d7724802
+app/src/main/cpp/xserver|https://gitlab.freedesktop.org/xorg/xserver.git|38efdcada1609139cb6673e1a4d0ebc8a96306f0
