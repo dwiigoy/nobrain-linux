@@ -17,7 +17,8 @@ installation.
 > loves Linux. This is a personal project and it is far from perfect. Criticism,
 > bug reports, ideas, and all kinds of feedback are warmly welcomed. It will
 > keep improving—with AI, of course. That is the philosophy: **No Brain
-> Required.** 😄
+> Required.** 😄 Please send feedback through
+> [GitHub Issues](https://github.com/dwiigoy/nobrain-linux/issues).
 
 > **Release status:** `v0.1.0` is the first public pre-release. Build 144 was
 > tested primarily on a Nubia Neo 5G running Android 13. Other ARM64 devices

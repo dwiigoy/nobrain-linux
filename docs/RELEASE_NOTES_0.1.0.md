@@ -14,6 +14,9 @@ This is a personal project. It is far from perfect, and that is okay. I warmly
 welcome criticism, bug reports, ideas, and all kinds of feedback. I will be
 very happy to keep learning and improving it—with AI, of course. 😄
 
+Please send feedback through
+[GitHub Issues](https://github.com/dwiigoy/nobrain-linux/issues).
+
 That is the philosophy behind this project: **No Brain Required.**
 
 ## Included
