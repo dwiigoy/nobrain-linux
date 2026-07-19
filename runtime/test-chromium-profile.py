@@ -37,7 +37,7 @@ for marker in ("syncCanonicalRuntime", "../../runtime", "../../dwm", "include 'c
     if marker not in gradle:
         raise SystemExit(f"canonical runtime asset sync marker missing: {marker}")
 
-for marker in ('TARGET_VERSION_CODE = 3', 'TARGET_VERSION_NAME = "0.1.1"',
+for marker in ('TARGET_VERSION_CODE = 4', 'TARGET_VERSION_NAME = "0.1.2"',
                '"nobrain-dialog-raise.c"', '"nobrain-ssh-access"',
                'Manifest versionCode attribute not found'):
     if marker not in zip_swap:
@@ -48,7 +48,7 @@ for marker in (
     "RUNTIME_CANON=/usr/local/share/nobrain/runtime",
     "install -m 755",
     "nobrain-chromium-shutdown:nobrain-chromium-shutdown",
-    ".dialog-helper-built-v1",
+    ".dialog-helper-built-v3",
     "nobrain-dialog-raise.c",
     "nobrain-ssh-access:nobrain-ssh-access",
     "-o /usr/local/bin/.nobrain-dialog-raise.tmp -lX11",
@@ -57,14 +57,19 @@ for marker in (
     "/usr/bin/xbps-install -Sy tiff5",
     "WPS_MIGRATE tiff5 deferred",
     ".dwm-click-focus-built-v1",
+    "objdump -d --disassemble=enternotify",
+    "DWM_MIGRATE already current",
     "make -C",
-    "DWM_MIGRATE build failed",
+    "DWM_MIGRATE deferred; keeping existing binary",
     "dwm-src/dwm.c",
     "nobrain-menu-core:nobrain-menu-core",
     "RUNTIME_RECONCILE_OK",
 ):
     if marker not in source:
         raise SystemExit(f"runtime reconciliation guard missing: {marker}")
+
+if "DWM_MIGRATE build failed' >> $DBG; rm -rf" in source:
+    raise SystemExit("DWM migration failure still blocks Linux startup")
 
 for marker in ('NOBRAIN_SDCARD_SHARED', '"/storage/emulated/0".equals(sdcardSrc)'):
     if marker not in proot:

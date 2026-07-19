@@ -24,8 +24,8 @@ installation.
 > Instagram. DMs are always welcome—come talk about Linux! There is only one
 > rule: **no brains allowed.**
 
-> **Release status:** `v0.1.1` is the current public pre-release, based on
-> runtime Build 146. The project has been tested primarily on a Nubia Neo 5G
+> **Release status:** `v0.1.2` is the current public pre-release, based on
+> runtime Build 150. The project has been tested primarily on a Nubia Neo 5G
 > running Android 13 and a Huawei MatePad 11.5 (2024). Other ARM64 devices need
 > broader testing.
 
@@ -47,8 +47,8 @@ automatically generated source ZIP when you want to install the application.
 Expected release asset:
 
 ```text
-nobrain-linux-0.1.1.apk
-SHA-256: 9588914249414db1527680150af297c6efcf046d5468bbfd875122c45afbfec4
+nobrain-linux-0.1.2.apk
+SHA-256: 2ec9e60f81412c22619cb63acaf7bb02ae5d790d74bb8fe5adb4891e5909cb60
 ```
 
 Requirements:
@@ -61,7 +61,7 @@ Requirements:
 
 ## Installation
 
-1. Download `nobrain-linux-0.1.1.apk` from Releases.
+1. Download `nobrain-linux-0.1.2.apk` from Releases.
 2. Allow APK installation from the browser or file manager when Android asks.
 3. Install and open NoBrain Linux.
 4. Grant `All files access` when Android opens the app-specific settings page;

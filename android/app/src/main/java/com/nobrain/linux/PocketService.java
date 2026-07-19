@@ -104,7 +104,7 @@ public class PocketService extends Service {
                 "DBG=/storage/emulated/0/Download/nobrain-debug.log;" +
                 "echo '=== proot start ===' > $DBG 2>/dev/null || DBG=/tmp/nobrain-debug.log;" +
                 "echo 'start' > $DBG;" +
-                "echo 'BUILD=146' >> $DBG;" +
+                "echo 'BUILD=150' >> $DBG;" +
                 "BOOT_STATUS=/tmp/nobrain-boot-status;" +
                 "boot_status() { printf '%s\\n' \"$1\" > \"$BOOT_STATUS\"; echo 'BOOT_STATUS: '$1 >> $DBG; };" +
                 "rm -f /tmp/nobrain-session-ready /tmp/nobrain-menu-visible /tmp/nobrain-menu-done;" +
@@ -119,7 +119,10 @@ public class PocketService extends Service {
                 "grep -q '^nobrain:' /etc/passwd 2>/dev/null || " +
                     "echo 'nobrain:x:1000:1000:NoBrain User:/home/nobrain:/bin/bash' >> /etc/passwd;" +
                 "grep -q '^wheel:.*nobrain' /etc/group 2>/dev/null || sed -i 's/^wheel:x:4:.*/wheel:x:4:nobrain/' /etc/group;" +
+                "chown 0:0 /usr/bin/su /bin/su /usr/bin/sudo /etc/sudo.conf /etc/sudoers 2>/dev/null || true;" +
                 "chmod 4755 /usr/bin/su /bin/su /usr/bin/sudo 2>/dev/null || true;" +
+                "chmod 0644 /etc/sudo.conf 2>/dev/null || true;" +
+                "chmod 0440 /etc/sudoers 2>/dev/null || true;" +
                 "echo 'privilege_tools='$(ls -l /usr/bin/su /usr/bin/sudo 2>/dev/null) >> $DBG;" +
                 "chmod 1777 /tmp /var/tmp 2>/dev/null || true;" +
                 "find /usr/lib -maxdepth 1 -type f \\( -name '*.so' -o -name '*.so.*' \\) -exec chmod 755 {} + 2>/dev/null || true;" +
@@ -282,7 +285,7 @@ public class PocketService extends Service {
                 // XBPS owns/flocks /var/db/xbps/lock; never unlink it from a
                 // wrapper. Retry a failed transaction after its child exits.
                 // The old pgrep gate could see the wrapper itself as busy and
-                "echo 'IyEvYmluL2Jhc2gKZXhwb3J0IFRNUERJUj0vdG1wCnVuc2V0IFBST09UX1RNUF9ESVIKY2htb2QgMTc3NyAvdG1wIC92YXIvdG1wIDI+L2Rldi9udWxsIHx8IHRydWUKClsgLXggL3Vzci9sb2NhbC9saWIvbm9icmFpbi14YnBzLW1ldGFkYXRhLWZpeC5zaCBdIFwKICAgICYmIC91c3IvbG9jYWwvbGliL25vYnJhaW4teGJwcy1tZXRhZGF0YS1maXguc2ggPi9kZXYvbnVsbCAyPiYxCgpsb2c9L3RtcC9ub2JyYWluLXhicHMtJCQubG9nCnN5c3RlbV91cGRhdGU9MApmb3IgYXJnIGluICIkQCI7IGRvCiAgICBjYXNlICIkYXJnIiBpbgogICAgICAgIC0tdXBkYXRlfC0qdSopIHN5c3RlbV91cGRhdGU9MSA7OwogICAgZXNhYwpkb25lCgpydW5feGJwcygpIHsKICAgIHJtIC1mICIkbG9nIgogICAgL3Vzci9iaW4veGJwcy1pbnN0YWxsICIkQCIgMj4mMSB8IHRlZSAiJGxvZyIKICAgIHJldD0ke1BJUEVTVEFUVVNbMF19Cn0KCnJldHJ5YWJsZSgpIHsKICAgIGdyZXAgLUVpcSBcCiAgICAgICAgJ2ZhaWxlZCB0byBkb3dubG9hZHxJbnB1dC9vdXRwdXQgZXJyb3J8T3BlcmF0aW9uIHRpbWVkIG91dHxDb25uZWN0aW9uIChyZXNldHx0aW1lZCBvdXQpfFRlbXBvcmFyeSBmYWlsdXJlfFNDUklQVCBmYWlsZWQgdG8gZXhlY3V0ZScgXAogICAgICAgICIkbG9nIgp9CgpydW5feGJwcyAiJEAiCm49MAp3aGlsZSBbICIkcmV0IiAtbmUgMCBdICYmIFsgIiRuIiAtbHQgMiBdICYmIHJldHJ5YWJsZTsgZG8KICAgIG49JCgobiArIDEpKQogICAgcHJpbnRmICdOb0JyYWluOiB4YnBzIGZhaWxlZDsgcmV0cnkgJXMvMiBpbiAyIHNlY29uZHMuLi5cbicgIiRuIiA+JjIKICAgIHNsZWVwIDIKICAgIHJ1bl94YnBzIC15ICIkQCIKZG9uZQoKcm0gLWYgIiRsb2ciCnB5dGhvbjMgL3Vzci9sb2NhbC9saWIvbm9icmFpbi1wa2dkYi1maXgucHkgPi9kZXYvbnVsbCAyPiYxCgppZiBbICIkcmV0IiAtZXEgMCBdICYmIFsgIiQoaWQgLXUpIiAtZXEgMCBdOyB0aGVuCiAgICAjIFBhY2thZ2UgdXBncmFkZXMgcmVwbGFjZSB0aGVzZSBmaWxlcyB3aXRob3V0IHRoZWlyIFBSb290IHJ1bnRpbWUgbW9kZXMuCiAgICBjaG1vZCA0NzU1IC91c3IvYmluL3N1IC9iaW4vc3UgL3Vzci9iaW4vc3VkbyAyPi9kZXYvbnVsbCB8fCB0cnVlCiAgICBjaG93biAwOjAgL2V0Yy9zdWRvLmNvbmYgL2V0Yy9zdWRvZXJzIDI+L2Rldi9udWxsIHx8IHRydWUKCiAgICBpZiBbICIkc3lzdGVtX3VwZGF0ZSIgLWVxIDEgXTsgdGhlbgogICAgICAgIHNzaF9yZWxvYWRlZD0wCiAgICAgICAgc3NoZF9jb25maWc9L3Jvb3QvLmNvbmZpZy9ub2JyYWluL3NzaC9zc2hkX2NvbmZpZwogICAgICAgIFsgLXMgIiRzc2hkX2NvbmZpZyIgXSB8fCBzc2hkX2NvbmZpZz0vZXRjL3NzaC9zc2hkX2NvbmZpZy5ub2JyYWluCiAgICAgICAgc3NoZF9waWRmaWxlPSQoL3Vzci9iaW4vc3NoZCAtVCAtZiAiJHNzaGRfY29uZmlnIiAyPi9kZXYvbnVsbCBcCiAgICAgICAgICAgIHwgYXdrICckMSA9PSAicGlkZmlsZSIgeyBwcmludCAkMjsgZXhpdCB9JykKICAgICAgICBbIC1uICIkc3NoZF9waWRmaWxlIiBdIHx8IHNzaGRfcGlkZmlsZT0vdG1wL3NzaGQucGlkCiAgICAgICAgc3NoZF9waWQ9JChjYXQgIiRzc2hkX3BpZGZpbGUiIDI+L2Rldi9udWxsKQogICAgICAgIGlmIFsgLW4gIiRzc2hkX3BpZCIgXSAmJiBraWxsIC0wICIkc3NoZF9waWQiIDI+L2Rldi9udWxsIFwKICAgICAgICAgICAgICAgICYmIC91c3IvYmluL3NzaGQgLXQgLWYgIiRzc2hkX2NvbmZpZyIgXAogICAgICAgICAgICAgICAgJiYga2lsbCAtSFVQICIkc3NoZF9waWQiIDI+L2Rldi9udWxsOyB0aGVuCiAgICAgICAgICAgIHNzaF9yZWxvYWRlZD0xCiAgICAgICAgICAgIHByaW50ZiAnTm9CcmFpbjogU1NIIHJlbG9hZGVkIGFmdGVyIHN5c3RlbSB1cGRhdGUuXG4nCiAgICAgICAgZmkKICAgICAgICBpZiBbICIkc3NoX3JlbG9hZGVkIiAtbmUgMSBdOyB0aGVuCiAgICAgICAgICAgIHByaW50ZiAnTm9CcmFpbjogU1NIIG1heSBiZSB1bmF2YWlsYWJsZS4gVXNlIG5vYnJhaW4tbWVudSAtPiBTaHV0ZG93biwgdGhlbiByZW9wZW4gTm9CcmFpbi5cbicgPiYyCiAgICAgICAgZmkKICAgIGZpCmZpCgpleGl0ICIkcmV0Igo=' | base64 -d > /usr/local/bin/xbps-install;" +
+                "echo 'IyEvYmluL2Jhc2gKZXhwb3J0IFRNUERJUj0vdG1wCnVuc2V0IFBST09UX1RNUF9ESVIKY2htb2QgMTc3NyAvdG1wIC92YXIvdG1wIDI+L2Rldi9udWxsIHx8IHRydWUKClsgLXggL3Vzci9sb2NhbC9saWIvbm9icmFpbi14YnBzLW1ldGFkYXRhLWZpeC5zaCBdIFwKICAgICYmIC91c3IvbG9jYWwvbGliL25vYnJhaW4teGJwcy1tZXRhZGF0YS1maXguc2ggPi9kZXYvbnVsbCAyPiYxCgpsb2c9L3RtcC9ub2JyYWluLXhicHMtJCQubG9nCnN5c3RlbV91cGRhdGU9MApmb3IgYXJnIGluICIkQCI7IGRvCiAgICBjYXNlICIkYXJnIiBpbgogICAgICAgIC0tdXBkYXRlfC0qdSopIHN5c3RlbV91cGRhdGU9MSA7OwogICAgZXNhYwpkb25lCgpydW5feGJwcygpIHsKICAgIHJtIC1mICIkbG9nIgogICAgL3Vzci9iaW4veGJwcy1pbnN0YWxsICIkQCIgMj4mMSB8IHRlZSAiJGxvZyIKICAgIHJldD0ke1BJUEVTVEFUVVNbMF19Cn0KCnJldHJ5YWJsZSgpIHsKICAgIGdyZXAgLUVpcSBcCiAgICAgICAgJ2ZhaWxlZCB0byBkb3dubG9hZHxJbnB1dC9vdXRwdXQgZXJyb3J8T3BlcmF0aW9uIHRpbWVkIG91dHxDb25uZWN0aW9uIChyZXNldHx0aW1lZCBvdXQpfFRlbXBvcmFyeSBmYWlsdXJlfFNDUklQVCBmYWlsZWQgdG8gZXhlY3V0ZScgXAogICAgICAgICIkbG9nIgp9CgpydW5feGJwcyAiJEAiCm49MAp3aGlsZSBbICIkcmV0IiAtbmUgMCBdICYmIFsgIiRuIiAtbHQgMiBdICYmIHJldHJ5YWJsZTsgZG8KICAgIG49JCgobiArIDEpKQogICAgcHJpbnRmICdOb0JyYWluOiB4YnBzIGZhaWxlZDsgcmV0cnkgJXMvMiBpbiAyIHNlY29uZHMuLi5cbicgIiRuIiA+JjIKICAgIHNsZWVwIDIKICAgIHJ1bl94YnBzIC15ICIkQCIKZG9uZQoKcm0gLWYgIiRsb2ciCnB5dGhvbjMgL3Vzci9sb2NhbC9saWIvbm9icmFpbi1wa2dkYi1maXgucHkgPi9kZXYvbnVsbCAyPiYxCgppZiBbICIkcmV0IiAtZXEgMCBdICYmIFsgIiQoaWQgLXUpIiAtZXEgMCBdOyB0aGVuCiAgICAjIFBhY2thZ2UgdXBncmFkZXMgcmVwbGFjZSB0aGVzZSBmaWxlcyB3aXRob3V0IHRoZWlyIFBSb290IHJ1bnRpbWUgbW9kZXMuCiAgICBjaG93biAwOjAgL3Vzci9iaW4vc3UgL2Jpbi9zdSAvdXNyL2Jpbi9zdWRvIDI+L2Rldi9udWxsIHx8IHRydWUKICAgIGNobW9kIDQ3NTUgL3Vzci9iaW4vc3UgL2Jpbi9zdSAvdXNyL2Jpbi9zdWRvIDI+L2Rldi9udWxsIHx8IHRydWUKICAgIGNob3duIDA6MCAvZXRjL3N1ZG8uY29uZiAvZXRjL3N1ZG9lcnMgMj4vZGV2L251bGwgfHwgdHJ1ZQogICAgY2htb2QgMDY0NCAvZXRjL3N1ZG8uY29uZiAyPi9kZXYvbnVsbCB8fCB0cnVlCiAgICBjaG1vZCAwNDQwIC9ldGMvc3Vkb2VycyAyPi9kZXYvbnVsbCB8fCB0cnVlCgogICAgaWYgWyAiJHN5c3RlbV91cGRhdGUiIC1lcSAxIF07IHRoZW4KICAgICAgICBzc2hfcmVsb2FkZWQ9MAogICAgICAgIHNzaGRfY29uZmlnPS9yb290Ly5jb25maWcvbm9icmFpbi9zc2gvc3NoZF9jb25maWcKICAgICAgICBbIC1zICIkc3NoZF9jb25maWciIF0gfHwgc3NoZF9jb25maWc9L2V0Yy9zc2gvc3NoZF9jb25maWcubm9icmFpbgogICAgICAgIHNzaGRfcGlkZmlsZT0kKC91c3IvYmluL3NzaGQgLVQgLWYgIiRzc2hkX2NvbmZpZyIgMj4vZGV2L251bGwgXAogICAgICAgICAgICB8IGF3ayAnJDEgPT0gInBpZGZpbGUiIHsgcHJpbnQgJDI7IGV4aXQgfScpCiAgICAgICAgWyAtbiAiJHNzaGRfcGlkZmlsZSIgXSB8fCBzc2hkX3BpZGZpbGU9L3RtcC9zc2hkLnBpZAogICAgICAgIHNzaGRfcGlkPSQoY2F0ICIkc3NoZF9waWRmaWxlIiAyPi9kZXYvbnVsbCkKICAgICAgICBpZiBbIC1uICIkc3NoZF9waWQiIF0gJiYga2lsbCAtMCAiJHNzaGRfcGlkIiAyPi9kZXYvbnVsbCBcCiAgICAgICAgICAgICAgICAmJiAvdXNyL2Jpbi9zc2hkIC10IC1mICIkc3NoZF9jb25maWciIFwKICAgICAgICAgICAgICAgICYmIGtpbGwgLUhVUCAiJHNzaGRfcGlkIiAyPi9kZXYvbnVsbDsgdGhlbgogICAgICAgICAgICBzc2hfcmVsb2FkZWQ9MQogICAgICAgICAgICBwcmludGYgJ05vQnJhaW46IFNTSCByZWxvYWRlZCBhZnRlciBzeXN0ZW0gdXBkYXRlLlxuJwogICAgICAgIGZpCiAgICAgICAgaWYgWyAiJHNzaF9yZWxvYWRlZCIgLW5lIDEgXTsgdGhlbgogICAgICAgICAgICBwcmludGYgJ05vQnJhaW46IFNTSCBtYXkgYmUgdW5hdmFpbGFibGUuIFVzZSBub2JyYWluLW1lbnUgLT4gU2h1dGRvd24sIHRoZW4gcmVvcGVuIE5vQnJhaW4uXG4nID4mMgogICAgICAgIGZpCiAgICBmaQpmaQoKZXhpdCAiJHJldCIK' | base64 -d > /usr/local/bin/xbps-install;" +
                 "chmod +x /usr/local/bin/xbps-install;" +
 
                 // ── Chromium wrapper ──────────────────────────────────────
@@ -595,7 +598,7 @@ public class PocketService extends Service {
                         "echo 'RUNTIME_RECONCILE missing='$src >> $DBG; exit 1; }; " +
                     "install -m 755 \"$RUNTIME_CANON/$src\" \"/usr/local/bin/$dst\" || exit 1; " +
                 "done;" +
-                "DIALOG_BUILD_MARK=$RUNTIME_CANON/.dialog-helper-built-v1;" +
+                "DIALOG_BUILD_MARK=$RUNTIME_CANON/.dialog-helper-built-v3;" +
                 "if [ ! -x /usr/local/bin/nobrain-dialog-raise ] || [ ! -e \"$DIALOG_BUILD_MARK\" ]; then " +
                     "cc -std=c11 -O2 -Wall -Wextra \"$RUNTIME_CANON/nobrain-dialog-raise.c\" " +
                         "-o /usr/local/bin/.nobrain-dialog-raise.tmp -lX11 || exit 1; " +
@@ -604,14 +607,21 @@ public class PocketService extends Service {
                 "fi;" +
                 "DWM_BUILD_MARK=$RUNTIME_CANON/.dwm-click-focus-built-v1;" +
                 "if [ ! -e \"$DWM_BUILD_MARK\" ]; then " +
-                    "DWM_BUILD=/tmp/nobrain-dwm-build.$$; rm -rf \"$DWM_BUILD\"; mkdir -p \"$DWM_BUILD\"; " +
-                    "cp -R \"$RUNTIME_CANON/dwm-src/.\" \"$DWM_BUILD/\" || exit 1; " +
-                    "if make -C \"$DWM_BUILD\" clean all >> $DBG 2>&1; then " +
-                        "install -m 755 \"$DWM_BUILD/dwm\" /usr/local/bin/dwm || exit 1; " +
-                        "install -m 755 \"$DWM_BUILD/dwm\" /usr/bin/dwm || exit 1; " +
-                        "touch \"$DWM_BUILD_MARK\"; " +
-                    "else echo 'DWM_MIGRATE build failed' >> $DBG; rm -rf \"$DWM_BUILD\"; exit 1; fi; " +
-                    "rm -rf \"$DWM_BUILD\"; " +
+                    "if objdump -d --disassemble=enternotify /usr/local/bin/dwm 2>/dev/null | " +
+                        "awk '/<enternotify>:/ { found=1; next } " +
+                            "found && /^[[:space:]]*[0-9a-f]+:/ { count++; if ($3 == \"ret\") rets++ } " +
+                            "END { exit !(found && count == 1 && rets == 1) }'; then " +
+                        "touch \"$DWM_BUILD_MARK\"; echo 'DWM_MIGRATE already current' >> $DBG; " +
+                    "else " +
+                        "DWM_BUILD=/tmp/nobrain-dwm-build.$$; rm -rf \"$DWM_BUILD\"; mkdir -p \"$DWM_BUILD\"; " +
+                        "cp -R \"$RUNTIME_CANON/dwm-src/.\" \"$DWM_BUILD/\" || exit 1; " +
+                        "if make -C \"$DWM_BUILD\" clean all >> $DBG 2>&1; then " +
+                            "install -m 755 \"$DWM_BUILD/dwm\" /usr/local/bin/dwm || exit 1; " +
+                            "install -m 755 \"$DWM_BUILD/dwm\" /usr/bin/dwm || exit 1; " +
+                            "touch \"$DWM_BUILD_MARK\"; " +
+                        "else echo 'DWM_MIGRATE deferred; keeping existing binary' >> $DBG; fi; " +
+                        "rm -rf \"$DWM_BUILD\"; " +
+                    "fi; " +
                 "fi;" +
                 "if command -v wps >/dev/null 2>&1 && ! xbps-query -p pkgver tiff5 >/dev/null 2>&1; then " +
                     "echo 'WPS_MIGRATE installing tiff5' >> $DBG; " +
@@ -704,7 +714,7 @@ public class PocketService extends Service {
                 // ── Stay alive ────────────────────────────────────────────
                 "sleep infinity"
             );
-            updateNotification("Build 146 - X11 :4 | SSH managed");
+            updateNotification("Build 150 - X11 :4 | SSH managed");
             serverProcess.waitFor();
         } catch (Exception e) {
             Log.e(TAG, "Server error: " + e.getMessage());

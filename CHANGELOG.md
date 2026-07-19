@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.2 - 2026-07-19
+
+- Fixed fresh-install startup stalling at `Preparing application support` by
+  detecting an already-patched DWM binary before attempting an in-guest build.
+- Made the DWM migration non-blocking on older rootfs installations that do
+  not have the Xft development headers required to rebuild DWM.
+- Repaired the owner and setuid modes of `su` and `sudo`, plus safe ownership
+  and modes for the sudo configuration, on every application start.
+- Extended the XBPS update wrapper to repeat that privilege repair after a
+  successful package transaction, keeping SSH Access usable after a full
+  `sudo xbps-install -Su`.
+- Fixed WPS native file choosers opening below their parent export dialog when
+  the chooser occupies almost the full X11 screen.
+- Verified Build 148 on a true fresh install followed by a full system update,
+  WPS installation, SSH key export, and key-only remote audit. The final Build
+  150 candidate also passed an update-in-place and canonical WPS reinstall
+  while preserving Linux documents and WPS configuration.
+
 ## 0.1.1 - 2026-07-19
 
 - Added a canonical first-run/runtime reconciliation step so packaged Chromium,

@@ -40,8 +40,11 @@ python3 /usr/local/lib/nobrain-pkgdb-fix.py >/dev/null 2>&1
 
 if [ "$ret" -eq 0 ] && [ "$(id -u)" -eq 0 ]; then
     # Package upgrades replace these files without their PRoot runtime modes.
+    chown 0:0 /usr/bin/su /bin/su /usr/bin/sudo 2>/dev/null || true
     chmod 4755 /usr/bin/su /bin/su /usr/bin/sudo 2>/dev/null || true
     chown 0:0 /etc/sudo.conf /etc/sudoers 2>/dev/null || true
+    chmod 0644 /etc/sudo.conf 2>/dev/null || true
+    chmod 0440 /etc/sudoers 2>/dev/null || true
 
     if [ "$system_update" -eq 1 ]; then
         ssh_reloaded=0

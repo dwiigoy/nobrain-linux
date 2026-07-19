@@ -49,6 +49,10 @@ test "$(grep -c 'xbps failed; retry' "$TMP/permanent.log" || true)" = 0
 grep -q 'system_update=1' "$SCRIPT_DIR/nobrain-xbps-install"
 grep -q 'chmod 4755 /usr/bin/su /bin/su /usr/bin/sudo' \
     "$SCRIPT_DIR/nobrain-xbps-install"
+grep -q 'chown 0:0 /usr/bin/su /bin/su /usr/bin/sudo' \
+    "$SCRIPT_DIR/nobrain-xbps-install"
+grep -q 'chmod 0644 /etc/sudo.conf' "$SCRIPT_DIR/nobrain-xbps-install"
+grep -q 'chmod 0440 /etc/sudoers' "$SCRIPT_DIR/nobrain-xbps-install"
 grep -q 'sshd_config=/root/.config/nobrain/ssh/sshd_config' \
     "$SCRIPT_DIR/nobrain-xbps-install"
 grep -q 'sshd -t -f "$sshd_config"' \

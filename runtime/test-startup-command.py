@@ -58,8 +58,8 @@ command = "".join(java_strings(text[start:end]))
 build_markers = re.findall(r"BUILD=([0-9]+)", command)
 if len(build_markers) != 1:
     raise SystemExit("startup command must contain exactly one numeric build marker")
-if build_markers[0] != "146":
-    raise SystemExit("startup command must identify Build 146")
+if build_markers[0] != "150":
+    raise SystemExit("startup command must identify Build 150")
 for forbidden in (
     "tiny@localhost",
     "AAAAC3NzaC1lZDI1NTE5AAAAIFt47",

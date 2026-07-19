@@ -77,8 +77,8 @@ _ICON_NEW_VAL = struct.pack('<HBBI', 8, 0, 0x01, MIPMAP_RES_ID)
 
 OLD_PKG = b"com/nobrain/linux"   # 17 bytes
 NEW_PKG = b"com/nobrain/panel"   # 17 bytes — same length, no reoffset needed
-TARGET_VERSION_CODE = 3
-TARGET_VERSION_NAME = "0.1.1"
+TARGET_VERSION_CODE = 4
+TARGET_VERSION_NAME = "0.1.2"
 assert len(OLD_PKG) == len(NEW_PKG)
 
 # libXlorie.so .data section hardcoded screen resolution offsets

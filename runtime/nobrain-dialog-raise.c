@@ -29,6 +29,18 @@ static Atom atom_window_type;
 static Atom atom_dialog;
 static volatile sig_atomic_t running = 1;
 static int lock_fd = -1;
+static void log_line(const char *format, ...);
+
+static int
+handle_x_error(Display *error_display, XErrorEvent *event)
+{
+	char message[128];
+
+	XGetErrorText(error_display, event->error_code, message, sizeof message);
+	log_line("X error request=%u minor=%u resource=0x%lx: %s",
+	         event->request_code, event->minor_code, event->resourceid, message);
+	return 0;
+}
 
 static void
 log_line(const char *format, ...)
@@ -240,8 +252,6 @@ looks_like_broken_chooser(Window window, unsigned long *pid)
 {
 	XWindowAttributes attributes;
 	Window parent;
-	int screen_width;
-	int screen_height;
 
 	if (!is_mapped(window) || !is_wps_class(window)
 	    || !get_cardinal(window, atom_pid, pid) || has_legacy_name(window)
@@ -250,19 +260,14 @@ looks_like_broken_chooser(Window window, unsigned long *pid)
 	parent = transient_parent(window);
 	if (parent != None || !XGetWindowAttributes(display, window, &attributes))
 		return false;
-	screen_width = DisplayWidth(display, DefaultScreen(display));
-	screen_height = DisplayHeight(display, DefaultScreen(display));
+	/*
+	 * WPS can create its unnamed native chooser at almost the full X screen
+	 * size. Its missing name/type/transient properties are the useful
+	 * signature; rejecting it at 95% leaves it below the dialog that opened it.
+	 */
 	return attributes.width >= 320 && attributes.height >= 180
-	       && attributes.width < screen_width * 95 / 100
-	       && attributes.height < screen_height * 95 / 100;
-}
-
-static void
-raise_and_focus(Window window)
-{
-	XRaiseWindow(display, window);
-	XSetInputFocus(display, window, RevertToPointerRoot, CurrentTime);
-	XFlush(display);
+	       && attributes.width <= DisplayWidth(display, DefaultScreen(display))
+	       && attributes.height <= DisplayHeight(display, DefaultScreen(display));
 }
 
 static bool
@@ -271,10 +276,10 @@ repair_window(Window window)
 	unsigned long pid;
 	Window parent;
 
-	if (transient_parent(window) != None || is_dialog(window)) {
-		raise_and_focus(window);
+	/* Normal dialogs already have a valid stacking relationship. Raising every
+	 * MapNotify can put their parent back above a newly opened file chooser. */
+	if (transient_parent(window) != None || is_dialog(window))
 		return false;
-	}
 	if (!looks_like_broken_chooser(window, &pid))
 		return false;
 	parent = find_parent(window, pid);
@@ -395,6 +400,7 @@ main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 	root = DefaultRootWindow(display);
+	XSetErrorHandler(handle_x_error);
 	atom_pid = XInternAtom(display, "_NET_WM_PID", False);
 	atom_window_type = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
 	atom_dialog = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", False);
@@ -428,6 +434,10 @@ main(int argc, char **argv)
 	log_line("started pid=%ld", (long)getpid());
 
 	while (running) {
+		if (XPending(display) == 0) {
+			usleep(50000);
+			continue;
+		}
 		XNextEvent(display, &event);
 		if (event.type == MapNotify) {
 			/* WPS may publish properties immediately after mapping. */
