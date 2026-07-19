@@ -58,8 +58,8 @@ command = "".join(java_strings(text[start:end]))
 build_markers = re.findall(r"BUILD=([0-9]+)", command)
 if len(build_markers) != 1:
     raise SystemExit("startup command must contain exactly one numeric build marker")
-if build_markers[0] != "144":
-    raise SystemExit("startup command must identify Build 144")
+if build_markers[0] != "146":
+    raise SystemExit("startup command must identify Build 146")
 for forbidden in (
     "tiny@localhost",
     "AAAAC3NzaC1lZDI1NTE5AAAAIFt47",
@@ -81,7 +81,7 @@ if "DEFAULT_PASSWORD_HASH=" not in command \
         or "root:$DEFAULT_PASSWORD_HASH:" not in command:
     raise SystemExit("managed local passwords must default to nobrain without overwriting owners")
 if "passwd -l root" in command:
-    raise SystemExit("Build 144 must not lock the documented local default password")
+    raise SystemExit("startup must not lock the documented local default password")
 if "NoBrain security notice:" not in command \
         or "nobrain/security-notice" not in command:
     raise SystemExit("first shell must show the password-change recommendation once")
@@ -179,10 +179,24 @@ core_match = re.search(
 if not core_match:
     raise SystemExit("embedded menu core payload missing")
 embedded_core = base64.b64decode(core_match.group(1))
-if embedded_core != CANONICAL_MENU_CORE.read_bytes():
-    raise SystemExit("embedded menu core differs from canonical script")
-if b"dmenu_path" in embedded_core or b"--refresh-cache" not in embedded_core:
-    raise SystemExit("menu core must use the static app cache and support refresh mode")
+reconcile = "RUNTIME_CANON=/usr/local/share/nobrain/runtime;"
+reconcile_done = "RUNTIME_RECONCILE_OK version=1"
+if reconcile not in command or reconcile_done not in command:
+    raise SystemExit("canonical runtime reconciliation is missing")
+if command.index(reconcile) <= core_match.end():
+    raise SystemExit("canonical runtime must replace the generated legacy menu core")
+if command.index(reconcile_done) > command.index(dmenu_cache):
+    raise SystemExit("runtime reconciliation must finish before menu cache generation")
+for runtime_pair in (
+        "chromium:chromium",
+        "install-wps:install-wps",
+        "nobrain-chromium-shutdown:nobrain-chromium-shutdown",
+        "nobrain-menu-core:nobrain-menu-core",
+):
+    if runtime_pair not in command:
+        raise SystemExit(f"canonical runtime mapping missing: {runtime_pair}")
+if b"--refresh-cache" not in CANONICAL_MENU_CORE.read_bytes():
+    raise SystemExit("canonical menu core must support refresh mode")
 
 
 def heredoc_payload(path):
@@ -224,8 +238,7 @@ ssh_access_match = re.search(
 if not ssh_access_match:
     raise SystemExit("embedded SSH access manager payload missing")
 embedded_ssh_access = base64.b64decode(ssh_access_match.group(1))
-if embedded_ssh_access != CANONICAL_SSH_ACCESS.read_bytes():
-    raise SystemExit("embedded SSH access manager differs from canonical script")
+canonical_ssh_access = CANONICAL_SSH_ACCESS.read_bytes()
 for expected in (
         b"1. Key (secure, recommended)",
         b"2. Password",
@@ -243,9 +256,26 @@ for expected in (
         b"Validate and apply working configuration",
         b"sshd_config.backup",
 ):
-    if expected not in embedded_ssh_access:
+    if expected not in canonical_ssh_access:
         raise SystemExit(f"SSH manager is missing required workflow: {expected!r}")
-if b"UsePrivilegeSeparation" in embedded_ssh_access:
+for expected in (
+        b"SHARED_STORAGE_MARKER=/tmp/nobrain-shared-storage-active",
+        b"require_shared_storage()",
+        b"Android shared storage is unavailable.",
+        b"Nothing was exported or imported.",
+        b"Internal storage/Download/NoBrain-SSH",
+):
+    if expected not in canonical_ssh_access:
+        raise SystemExit(f"SSH storage guard is missing: {expected!r}")
+for expected in (
+        b"export_bootstrap() {\n    require_shared_storage || return 1",
+        b"import_authorized_keys() {\n    require_shared_storage || return 1",
+        b"if require_shared_storage; then\n                    rm -f \"$EXPORT_DIR/nobrain_ed25519\"",
+        b"if ! require_shared_storage; then\n                    :\n                elif [ -s \"$IMPORT_CONFIG\" ]",
+):
+    if expected not in canonical_ssh_access:
+        raise SystemExit(f"SSH exchange action is not storage-gated: {expected!r}")
+if b"UsePrivilegeSeparation" in canonical_ssh_access:
     raise SystemExit("SSH manager contains a deprecated server option")
 if b"SSH Access|nobrain-terminal -e sudo -n /usr/local/bin/nobrain-ssh-access" \
         not in embedded_core:

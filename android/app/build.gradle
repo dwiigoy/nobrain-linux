@@ -2,6 +2,26 @@ plugins {
     id 'com.android.application'
 }
 
+def canonicalRuntimeDir = file('../../runtime')
+def canonicalDwmDir = file('../../dwm')
+def generatedRuntimeAssetsDir = file("$buildDir/generated/runtime-assets")
+
+tasks.register('syncCanonicalRuntime', Sync) {
+    from(canonicalRuntimeDir) {
+        include 'chromium'
+        include 'install-wps'
+        include 'nobrain-chromium-shutdown'
+        include 'nobrain-dialog-raise.c'
+        include 'nobrain-ssh-access'
+        include 'nobrain-menu-core'
+    }
+    from(canonicalDwmDir) {
+        include 'Makefile', 'config.mk', 'config.h', 'drw.c', 'drw.h', 'dwm.c', 'util.c', 'util.h'
+        into 'dwm-src'
+    }
+    into(generatedRuntimeAssetsDir)
+}
+
 android {
     namespace 'com.nobrain.linux'
     compileSdk 34
@@ -10,8 +30,8 @@ android {
         applicationId "com.nobrain.panel"
         minSdk 28
         targetSdk 34
-        versionCode 1
-        versionName "0.1.0"
+        versionCode 3
+        versionName "0.1.1"
         // ARM64 only - no need for other ABIs
         ndk { abiFilters 'arm64-v8a' }
     }
@@ -38,6 +58,17 @@ android {
         // Include native libs as-is
         jniLibs { keepDebugSymbols.add("**/*.so") }
     }
+
+    // Package the canonical runtime scripts directly. PocketService stages
+    // these assets into the guest and installs them after legacy bootstrap
+    // generation, so runtime/ remains the single source of truth.
+    sourceSets {
+        main.assets.srcDirs += [generatedRuntimeAssetsDir]
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('syncCanonicalRuntime')
 }
 
 dependencies {

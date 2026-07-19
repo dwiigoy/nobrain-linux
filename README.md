@@ -24,9 +24,10 @@ installation.
 > Instagram. DMs are always welcome—come talk about Linux! There is only one
 > rule: **no brains allowed.**
 
-> **Release status:** `v0.1.0` is the first public pre-release. Build 144 was
-> tested primarily on a Nubia Neo 5G running Android 13 and a Huawei MatePad
-> 11.5 (2024). Other ARM64 devices need broader testing.
+> **Release status:** `v0.1.1` is the current public pre-release, based on
+> runtime Build 146. The project has been tested primarily on a Nubia Neo 5G
+> running Android 13 and a Huawei MatePad 11.5 (2024). Other ARM64 devices need
+> broader testing.
 
 ## Highlights
 
@@ -46,8 +47,8 @@ automatically generated source ZIP when you want to install the application.
 Expected release asset:
 
 ```text
-nobrain-linux-0.1.0.apk
-SHA-256: 9ca835b82eb2368fd26aa63950e57b45dbfb1d9118a8134375b3367843424819
+nobrain-linux-0.1.1.apk
+SHA-256: 9588914249414db1527680150af297c6efcf046d5468bbfd875122c45afbfec4
 ```
 
 Requirements:
@@ -60,11 +61,13 @@ Requirements:
 
 ## Installation
 
-1. Download `nobrain-linux-0.1.0.apk` from Releases.
+1. Download `nobrain-linux-0.1.1.apk` from Releases.
 2. Allow APK installation from the browser or file manager when Android asks.
 3. Install and open NoBrain Linux.
-4. Keep the app open while the startup screen prepares the first session.
-5. Wait until the status changes to `Desktop ready` before using shortcuts.
+4. Grant `All files access` when Android opens the app-specific settings page;
+   this is required for the visible `Download/NoBrain-SSH` exchange folder.
+5. Keep the app open while the startup screen prepares the first session.
+6. Wait until the status changes to `Desktop ready` before using shortcuts.
 
 An in-place update signed by the same NoBrain release certificate preserves the
 Linux home directory and application data. Keep a backup before updating from
@@ -92,6 +95,11 @@ Then connect from another device:
 ```bash
 ssh -i ~/.ssh/nobrain_ed25519 -p 2223 nobrain@DEVICE_IP
 ```
+
+`Export key` writes to `Internal storage/Download/NoBrain-SSH` only when
+Android shared storage is genuinely mounted. Otherwise the operation fails
+with an instruction to grant `All files access` and restart NoBrain; it does
+not silently export a private key into an app-specific fallback directory.
 
 The `nobrain` account has passwordless sudo because NoBrain currently uses a
 single-owner device model. It is not a multi-user security boundary.
@@ -123,7 +131,7 @@ public build path.
 - The first public source snapshot does not yet produce the full release APK
   with one command because the rootfs and third-party Android binaries are
   deliberately excluded from Git.
-- Build 144 has a harmless diagnostic path that looks for the PulseAudio log
+- The runtime has a harmless diagnostic path that looks for the PulseAudio log
   under the old package name; audio itself runs normally.
 
 ## License

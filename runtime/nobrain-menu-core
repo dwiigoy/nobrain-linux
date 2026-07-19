@@ -116,7 +116,7 @@ fi
 case "$choice" in
   Shutdown)
     printf "" | DISPLAY=$D dmenu -fn "$_dmfn" -p "Shutting down..."
-    pkill -9 -x chromium 2>/dev/null
+    /usr/local/bin/nobrain-chromium-shutdown
     pkill -9 -x firefox 2>/dev/null
     pkill -9 -x xterm 2>/dev/null
     pkill -9 -x tmux 2>/dev/null

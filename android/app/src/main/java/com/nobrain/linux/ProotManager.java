@@ -310,6 +310,8 @@ public class ProotManager {
         pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin");
         pb.environment().put("DISPLAY", GUEST_DISPLAY);
         pb.environment().put("TMPDIR", "/tmp");
+        pb.environment().put("NOBRAIN_SDCARD_SHARED",
+            "/storage/emulated/0".equals(sdcardSrc) ? "1" : "0");
         pb.environment().put("GALLIUM_DRIVER", "virpipe");
         pb.environment().put("LIBGL_ALWAYS_SOFTWARE", "1");
         pb.redirectErrorStream(true);

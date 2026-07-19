@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# The optional argument is the maximum wait in tenths of a second.
+max_wait=${1:-150}
+case "$max_wait" in
+    ''|*[!0-9]*) max_wait=150 ;;
+esac
+
+profile="${HOME:-/home/nobrain}/.config/nobrain-chromium"
+
+pkill -TERM -x chromium 2>/dev/null || true
+pkill -TERM -x chrome 2>/dev/null || true
+
+waited=0
+while { pgrep -x chromium >/dev/null 2>&1 \
+        || pgrep -x chrome >/dev/null 2>&1; } \
+        && [ "$waited" -lt "$max_wait" ]; do
+    waited=$((waited + 1))
+    sleep 0.1
+done
+
+if pgrep -x chromium >/dev/null 2>&1 \
+        || pgrep -x chrome >/dev/null 2>&1; then
+    printf 'NoBrain: Chromium did not stop after %s.%s seconds; forcing exit.\n' \
+        "$((max_wait / 10))" "$((max_wait % 10))" >&2
+    pkill -KILL -x chromium 2>/dev/null || true
+    pkill -KILL -x chrome 2>/dev/null || true
+fi
+
+# Ask the kernel to write the persistent profile before the guest is torn down.
+if [ -d "$profile" ]; then
+    sync -f "$profile" 2>/dev/null || sync
+fi

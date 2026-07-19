@@ -1,0 +1,181 @@
+#!/bin/sh
+WPS_BIN=/opt/kingsoft/wps-office/office6/wps
+DEB_URL="https://github.com/Pi-Apps-Coders/files/releases/download/large-files/wps-office_11.1.0.11720_arm64.deb"
+DEB_FILE=/tmp/wps-office.deb
+PINS=/root/.nobrain-pins
+LOG=/tmp/wps-install.log
+OFFICE6=/opt/kingsoft/wps-office/office6
+
+run_xbps_step() {
+    label="$1"
+    shift
+    echo ""
+    echo "-- $label --"
+    echo "Detail log: $LOG"
+    tmp=/tmp/wps-xbps-status.$$
+    rm -f "$tmp"
+    ( "$@"; echo $? > "$tmp" ) 2>&1 | tee -a "$LOG"
+    ret=1
+    [ -f "$tmp" ] && ret=$(cat "$tmp")
+    rm -f "$tmp"
+    return "$ret"
+}
+
+fix_bundled_libs() {
+    # Remove WPS bundled libraries older than the system Void versions.
+    rm -f "$OFFICE6/libstdc++.so.6"
+    rm -f "$OFFICE6/libfreetype.so.6"
+}
+
+prepare_xbps_triggers() {
+    # PRoot cannot run several package triggers with their normal privileges.
+    for f in /usr/libexec/xbps-triggers/*; do
+        printf '#!/bin/sh\nexit 0\n' > "$f" && chmod +x "$f"
+    done 2>/dev/null
+    for cmd in ldconfig update-ca-certificates update-alternatives \
+            update-mime-database gtk-update-icon-cache glib-compile-schemas; do
+        [ -x "/usr/local/bin/$cmd" ] || {
+            printf '#!/bin/sh\nexit 0\n' > "/usr/local/bin/$cmd"
+            chmod +x "/usr/local/bin/$cmd"
+        }
+    done 2>/dev/null
+}
+
+ensure_wps_runtime_deps() {
+    if ! xbps-query -p pkgver tiff5 >/dev/null 2>&1; then
+        run_xbps_step "Installing WPS PDF compatibility library" \
+            xbps-install -fy tiff5 || return 1
+    fi
+    if [ ! -e /usr/lib/libtiff.so.5 ] && [ ! -e /usr/lib64/libtiff.so.5 ]; then
+        echo "ERROR: tiff5 installed but libtiff.so.5 is unavailable."
+        return 1
+    fi
+}
+
+: >> "$LOG"
+prepare_xbps_triggers
+fix_bundled_libs
+if ! ensure_wps_runtime_deps; then
+    echo "ERROR: WPS PDF runtime dependency repair failed."
+    echo "Check log: $LOG"
+    exit 1
+fi
+
+if [ -f "$WPS_BIN" ]; then
+    echo "WPS Office is already installed. Runtime dependencies repaired."
+    exit 0
+fi
+
+echo "=== Install WPS Office ARM64 (~367MB) ==="
+echo "Long package steps will show progress here and in $LOG."
+: > "$LOG"
+
+if ! command -v xz >/dev/null 2>&1; then
+    run_xbps_step "Installing xz (decompressor)" xbps-install -fy xz || true
+fi
+
+echo "Downloading from Pi-Apps-Coders GitHub..."
+if ! wget -q --show-progress -O "$DEB_FILE" "$DEB_URL"; then
+    echo "ERROR: Download failed. Check your internet connection."
+    rm -f "$DEB_FILE"
+    echo "Press Enter to close..."; read -r _dummy
+    exit 1
+fi
+
+echo "Extracting package..."
+python3 << 'PYPEOF'
+import os
+import sys
+
+deb = "/tmp/wps-office.deb"
+dest = "/"
+found = False
+
+with open(deb, "rb") as archive:
+    if archive.read(8) != b"!<arch>\n":
+        print("ERROR: not an ar archive")
+        sys.exit(1)
+    while True:
+        header = archive.read(60)
+        if len(header) < 60:
+            break
+        name = header[0:16].rstrip(b" /").decode(errors="replace")
+        size = int(header[48:58].rstrip(b" "))
+        data = archive.read(size)
+        if size % 2:
+            archive.read(1)
+        if name.startswith("data.tar"):
+            found = True
+            temporary = "/tmp/" + name
+            with open(temporary, "wb") as output:
+                output.write(data)
+            print(f"Extracting {name} to {dest} ...")
+            result = os.system(f"tar xf {temporary} -C {dest} 2>&1")
+            os.unlink(temporary)
+            if result:
+                print(f"ERROR: tar failed (exit {result}).")
+                sys.exit(1)
+            print("Extraction complete.")
+            break
+
+if not found:
+    print("ERROR: data.tar.* not found in .deb")
+    sys.exit(1)
+PYPEOF
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Extraction failed."
+    rm -f "$DEB_FILE"
+    echo "Press Enter to close..."; read -r _dummy
+    exit 1
+fi
+rm -f "$DEB_FILE"
+
+if [ ! -f "$WPS_BIN" ]; then
+    echo "ERROR: WPS binary not found after extraction."
+    echo "Check log: $LOG"
+    echo "Press Enter to close..."; read -r _dummy
+    exit 1
+fi
+
+fix_bundled_libs
+ensure_wps_runtime_deps || exit 1
+
+run_xbps_step "Installing glibc-locales (gconv modules; may download dependencies)" \
+    xbps-install -fy glibc-locales
+if [ ! -d /usr/lib/gconv ]; then
+    echo "WARN: /usr/lib/gconv not found, trying glibc..."
+    run_xbps_step "Trying glibc fallback for gconv modules" \
+        xbps-install -fy glibc || true
+fi
+if [ ! -d /usr/lib/gconv ]; then
+    echo "ERROR: gconv modules still missing. WPS may crash."
+    echo "Check: cat $LOG"
+fi
+
+echo "Refreshing font cache..."
+fc-cache -f /usr/share/fonts/ 2>&1 | tee -a "$LOG" || true
+
+if [ -f "$PINS" ]; then
+    python3 - "$PINS" << 'PYPEOF'
+import sys
+
+path = sys.argv[1]
+pins = [line for line in open(path) if "install-wps" not in line]
+for entry in (
+    "WPS Writer|wps-writer\n",
+    "WPS Spreadsheet|et\n",
+    "WPS Presentation|wpp\n",
+):
+    if entry not in pins:
+        pins.append(entry)
+open(path, "w").writelines(pins)
+print("NoBrain pins updated.")
+PYPEOF
+fi
+
+echo ""
+echo "=== WPS Office installed successfully! ==="
+echo "Export PDFs to ~/Documents/WPS-Export for automatic Android copying."
+echo "Press Enter to close..."
+read -r _dummy

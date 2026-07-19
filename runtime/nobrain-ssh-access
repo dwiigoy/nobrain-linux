@@ -7,6 +7,7 @@ AUTH_DIR=/etc/ssh/authorized_keys
 AUTH=$AUTH_DIR/nobrain
 LEGACY_ROOT_AUTH=$AUTH_DIR/root
 EXPORT_DIR=/sdcard/Download/NoBrain-SSH
+SHARED_STORAGE_MARKER=/tmp/nobrain-shared-storage-active
 IMPORT_KEYS=$EXPORT_DIR/authorized_keys
 IMPORT_CONFIG=$EXPORT_DIR/sshd_config
 CONFIG_DIR=/root/.config/nobrain/ssh
@@ -21,6 +22,25 @@ PASSWORD_STATE=/etc/nobrain-user-password-state
 pause() {
     printf '\nPress Enter to continue...'
     read -r _pause
+}
+
+shared_storage_ready() {
+    [ -f "$SHARED_STORAGE_MARKER" ] && [ -d /sdcard ] && [ -w /sdcard ]
+}
+
+require_shared_storage() {
+    if ! shared_storage_ready; then
+        printf '%s\n' \
+            'Android shared storage is unavailable.' \
+            'Grant NoBrain Linux "All files access", then use Shutdown and reopen the app.' \
+            'Nothing was exported or imported.' >&2
+        return 1
+    fi
+    mkdir -p /sdcard/Download
+    if [ ! -d /sdcard/Download ] || [ ! -w /sdcard/Download ]; then
+        printf 'Android Download directory is not writable. Nothing was changed.\n' >&2
+        return 1
+    fi
 }
 
 write_key_config() {
@@ -242,7 +262,14 @@ show_status() {
     else
         printf 'Bootstrap key: not stored\n'
     fi
-    if [ -s "$EXPORT_DIR/nobrain_ed25519" ]; then
+    if shared_storage_ready; then
+        printf 'Android exchange folder: Internal storage/Download/NoBrain-SSH\n'
+    else
+        printf 'Android exchange folder: UNAVAILABLE (grant All files access, then restart)\n'
+    fi
+    if ! shared_storage_ready; then
+        printf 'Shared private-key export: unknown while storage is unavailable\n'
+    elif [ -s "$EXPORT_DIR/nobrain_ed25519" ]; then
         printf 'Shared private-key export: PRESENT\n'
     else
         printf 'Shared private-key export: absent\n'
@@ -250,6 +277,7 @@ show_status() {
 }
 
 export_bootstrap() {
+    require_shared_storage || return 1
     if [ ! -s "$KEY" ] || [ ! -s "$KEY.pub" ]; then
         printf 'Bootstrap key is not stored. Rotate it first.\n' >&2
         return 1
@@ -272,6 +300,7 @@ filter_import_keys() {
 }
 
 import_authorized_keys() {
+    require_shared_storage || return 1
     if [ ! -s "$IMPORT_KEYS" ]; then
         printf 'Place authorized_keys at %s first.\n' "$IMPORT_KEYS" >&2
         return 1
@@ -342,7 +371,11 @@ rotate_bootstrap() {
     install -m 600 "$_new_auth" "$AUTH"
     sync_authorized_keys
     rm -f "$_new" "$_new.pub" "$_new_auth"
-    rm -f "$EXPORT_DIR/nobrain_ed25519" "$EXPORT_DIR/nobrain_ed25519.pub"
+    if shared_storage_ready; then
+        rm -f "$EXPORT_DIR/nobrain_ed25519" "$EXPORT_DIR/nobrain_ed25519.pub"
+    else
+        printf 'Warning: old shared export could not be removed; its key is revoked.\n' >&2
+    fi
     _pid=$(listener_pid)
     [ -z "$_pid" ] || kill -HUP "$_pid" 2>/dev/null || true
     printf 'Bootstrap rotated. Imported client keys were preserved.\n'
@@ -370,8 +403,10 @@ key_menu() {
             3) import_authorized_keys || true; pause ;;
             4) rotate_bootstrap || true; pause ;;
             5)
-                rm -f "$EXPORT_DIR/nobrain_ed25519"
-                printf 'Exported private key removed.\n'
+                if require_shared_storage; then
+                    rm -f "$EXPORT_DIR/nobrain_ed25519"
+                    printf 'Exported private key removed.\n'
+                fi
                 pause
                 ;;
             b|B) return ;;
@@ -424,7 +459,9 @@ custom_menu() {
                 "${EDITOR:-vi}" "$WORK_CONFIG" || true
                 ;;
             2)
-                if [ -s "$IMPORT_CONFIG" ]; then
+                if ! require_shared_storage; then
+                    :
+                elif [ -s "$IMPORT_CONFIG" ]; then
                     install -m 600 "$IMPORT_CONFIG" "$WORK_CONFIG"
                     printf 'Imported into the working configuration.\n'
                 else
@@ -433,9 +470,11 @@ custom_menu() {
                 pause
                 ;;
             3)
-                mkdir -p "$EXPORT_DIR"
-                install -m 600 "$CONFIG" "$EXPORT_DIR/sshd_config"
-                printf 'Active configuration exported to %s/sshd_config\n' "$EXPORT_DIR"
+                if require_shared_storage; then
+                    mkdir -p "$EXPORT_DIR"
+                    install -m 600 "$CONFIG" "$EXPORT_DIR/sshd_config"
+                    printf 'Active configuration exported to %s/sshd_config\n' "$EXPORT_DIR"
+                fi
                 pause
                 ;;
             4)

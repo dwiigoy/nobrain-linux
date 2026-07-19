@@ -934,20 +934,9 @@ drawbars(void)
 void
 enternotify(XEvent *e)
 {
-	Client *c;
-	Monitor *m;
-	XCrossingEvent *ev = &e->xcrossing;
-
-	if ((ev->mode != NotifyNormal || ev->detail == NotifyInferior) && ev->window != root)
-		return;
-	c = wintoclient(ev->window);
-	m = c ? c->mon : wintomon(ev->window);
-	if (m != selmon) {
-		unfocus(selmon->sel, 1);
-		selmon = m;
-	} else if (!c || c == selmon->sel)
-		return;
-	focus(c);
+	/* NoBrain uses click-to-focus. Touch/XLorie pointer entry must not
+	 * silently change the client targeted by close and keyboard commands. */
+	(void)e;
 }
 
 void

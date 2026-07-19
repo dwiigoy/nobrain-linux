@@ -1,0 +1,38 @@
+#!/bin/sh
+
+export DISPLAY="${DISPLAY:-127.0.0.1:4}"
+export PULSE_SERVER="${PULSE_SERVER:-tcp:127.0.0.1:4713}"
+export TMPDIR=/tmp
+
+unset ANDROID_SOCKET_zygote
+unset ANDROID_SOCKET_usap_pool_primary
+unset GOOGLE_API_KEY
+unset GOOGLE_DEFAULT_CLIENT_ID
+unset GOOGLE_DEFAULT_CLIENT_SECRET
+
+RUNTIME=/tmp/xdg-runtime
+PROFILE="${HOME:-/home/nobrain}/.config/nobrain-chromium"
+mkdir -p "$RUNTIME" "$PROFILE"
+chmod 700 "$RUNTIME" "$PROFILE" 2>/dev/null || true
+export XDG_RUNTIME_DIR="$RUNTIME"
+
+export GALLIUM_DRIVER=virpipe
+export VIRGL_SOCKET_PATH=/tmp/.virgl_test
+unset LIBGL_ALWAYS_SOFTWARE
+
+_scale=$(python3 -c \
+    'import sys; v=float(sys.stdin.read().strip() or 100); print((v if v > 4 else 100) / 100)' \
+    < /root/.config/nobrain-scale 2>/dev/null || printf '1.0\n')
+
+exec /usr/lib/chromium/chromium \
+    --no-sandbox \
+    --force-device-scale-factor="$_scale" \
+    --disable-dev-shm-usage \
+    --enable-gpu-rasterization \
+    --ignore-gpu-blocklist \
+    --enable-zero-copy \
+    --use-gl=egl \
+    --no-first-run \
+    --password-store=basic \
+    --user-data-dir="$PROFILE" \
+    "$@"

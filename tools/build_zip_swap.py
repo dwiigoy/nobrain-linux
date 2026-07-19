@@ -29,6 +29,21 @@ NEW_XLORIE_SO = os.environ.get(
     "NOBRAIN_XLORIE_SO",
     os.path.join(PROJECT_ROOT, "android/app/src/main/jniLibs/arm64-v8a/libXlorie.so"),
 )
+RUNTIME_ASSETS = {
+    f"assets/{name}": os.path.join(PROJECT_ROOT, "runtime", name)
+    for name in (
+        "chromium",
+        "install-wps",
+        "nobrain-chromium-shutdown",
+        "nobrain-dialog-raise.c",
+        "nobrain-ssh-access",
+        "nobrain-menu-core",
+    )
+}
+RUNTIME_ASSETS.update({
+    f"assets/dwm-src/{name}": os.path.join(PROJECT_ROOT, "dwm", name)
+    for name in ("Makefile", "config.mk", "config.h", "drw.c", "drw.h", "dwm.c", "util.c", "util.h")
+})
 NATIVE_LIB_DIR = os.path.dirname(NEW_XLORIE_SO)
 ICON_SRC = os.environ.get(
     "NOBRAIN_ICON", os.path.join(PROJECT_ROOT, "assets/nobrain-icon.png")
@@ -62,6 +77,8 @@ _ICON_NEW_VAL = struct.pack('<HBBI', 8, 0, 0x01, MIPMAP_RES_ID)
 
 OLD_PKG = b"com/nobrain/linux"   # 17 bytes
 NEW_PKG = b"com/nobrain/panel"   # 17 bytes — same length, no reoffset needed
+TARGET_VERSION_CODE = 3
+TARGET_VERSION_NAME = "0.1.1"
 assert len(OLD_PKG) == len(NEW_PKG)
 
 # libXlorie.so .data section hardcoded screen resolution offsets
@@ -402,7 +419,8 @@ def patch_manifest(data: bytes) -> bytes:
     """Patch binary AXML manifest:
     1. OR additional configChanges flags (screenLayout etc.)
     2. Replace android:icon reference to point to our app-defined mipmap resource.
-    3. Fix resource ID map: remap 'icon' string from android:versionCode (0x0101021B)
+    3. Set the release version code/name for the ZIP-swap build.
+    4. Fix resource ID map: remap 'icon' string from android:versionCode (0x0101021B)
        to android:icon (0x01010002) so PackageParser recognises the attribute.
     """
     data = bytearray(data)
@@ -449,6 +467,70 @@ def patch_manifest(data: bytes) -> bytes:
     abs_str_val   = sp_off + sp_str_start
     is_utf8_val   = bool(sp_flags_val & 0x100)
 
+    if struct.unpack_from('<I', data, sp_off + 12)[0] != 0:
+        raise SystemExit("Manifest string styles are unsupported by the ZIP-swap version patch")
+
+    def _read_len8(buf, pos):
+        first = buf[pos]
+        return (((first & 0x7f) << 8) | buf[pos + 1], pos + 2) if first & 0x80 else (first, pos + 1)
+
+    def _write_len8(value):
+        return bytes((0x80 | (value >> 8), value & 0xff)) if value > 0x7f else bytes((value,))
+
+    def _read_len16(buf, pos):
+        first = struct.unpack_from('<H', buf, pos)[0]
+        if first & 0x8000:
+            second = struct.unpack_from('<H', buf, pos + 2)[0]
+            return (((first & 0x7fff) << 16) | second, pos + 4)
+        return first, pos + 2
+
+    def _write_len16(value):
+        if value > 0x7fff:
+            return struct.pack('<HH', 0x8000 | (value >> 16), value & 0xffff)
+        return struct.pack('<H', value)
+
+    strings = []
+    for i in range(sp_cnt_val):
+        rel = struct.unpack_from('<I', data, sp_off + sp_hdr_sz_val + i * 4)[0]
+        pos = abs_str_val + rel
+        if is_utf8_val:
+            char_len, pos = _read_len8(data, pos)
+            byte_len, pos = _read_len8(data, pos)
+            strings.append(bytes(data[pos:pos + byte_len]).decode('utf-8'))
+        else:
+            char_len, pos = _read_len16(data, pos)
+            strings.append(bytes(data[pos:pos + char_len * 2]).decode('utf-16-le'))
+
+    version_indexes = [i for i, value in enumerate(strings) if value in ("0.1", "0.1.0", TARGET_VERSION_NAME)]
+    if len(version_indexes) != 1:
+        raise SystemExit(f"Manifest versionName string is ambiguous: {version_indexes}")
+    strings[version_indexes[0]] = TARGET_VERSION_NAME
+
+    rebuilt_strings = bytearray()
+    rebuilt_offsets = []
+    for value in strings:
+        rebuilt_offsets.append(len(rebuilt_strings))
+        encoded = value.encode('utf-8')
+        if is_utf8_val:
+            rebuilt_strings += _write_len8(len(value)) + _write_len8(len(encoded)) + encoded + b'\0'
+        else:
+            encoded16 = value.encode('utf-16-le')
+            rebuilt_strings += _write_len16(len(value)) + encoded16 + b'\0\0'
+    while len(rebuilt_strings) % 4:
+        rebuilt_strings.append(0)
+
+    old_sp_total = sp_total_val
+    new_sp_total = sp_str_start + len(rebuilt_strings)
+    pool_prefix = bytearray(data[sp_off:abs_str_val])
+    struct.pack_into('<I', pool_prefix, 4, new_sp_total)
+    for i, rel in enumerate(rebuilt_offsets):
+        struct.pack_into('<I', pool_prefix, sp_hdr_sz_val + i * 4, rel)
+    data[sp_off:sp_off + old_sp_total] = pool_prefix + rebuilt_strings
+    struct.pack_into('<I', data, 4, len(data))
+    sp_total_val = new_sp_total
+    abs_str_val = sp_off + sp_str_start
+    print(f"  Manifest: versionName -> {TARGET_VERSION_NAME}")
+
     rmap_off_val  = sp_off + sp_total_val
     rmap_ct       = struct.unpack_from('<H', data, rmap_off_val)[0]
     if rmap_ct == 0x0180:
@@ -475,6 +557,41 @@ def patch_manifest(data: bytes) -> bytes:
                     print(f"  Manifest: rmap[{i}]('icon') = 0x{old_rid:08X} (already correct)")
     else:
         print(f"  WARNING: expected rmap chunk (0x0180) at {rmap_off_val}, got 0x{rmap_ct:04X}")
+
+    def _pool_string(index):
+        rel = struct.unpack_from('<I', data, sp_off + sp_hdr_sz_val + index * 4)[0]
+        pos = abs_str_val + rel
+        if is_utf8_val:
+            _, pos = _read_len8(data, pos)
+            byte_len, pos = _read_len8(data, pos)
+            return bytes(data[pos:pos + byte_len]).decode('utf-8', 'replace')
+        char_len, pos = _read_len16(data, pos)
+        return bytes(data[pos:pos + char_len * 2]).decode('utf-16-le', 'replace')
+
+    version_code_patched = False
+    version_scan = rmap_off_val + rmap_total_val
+    while version_scan < len(data) - 8:
+        chunk_type, _, chunk_size = struct.unpack_from('<HHI', data, version_scan)
+        if chunk_type == 0x0102:
+            name_index = struct.unpack_from('<I', data, version_scan + 20)[0]
+            if _pool_string(name_index) == 'manifest':
+                attr_start, attr_size, attr_count = struct.unpack_from('<HHH', data, version_scan + 24)
+                attr_base = version_scan + 16 + attr_start
+                for i in range(attr_count):
+                    attr_pos = attr_base + i * attr_size
+                    attr_name_index = struct.unpack_from('<I', data, attr_pos + 4)[0]
+                    if _pool_string(attr_name_index) == 'versionCode':
+                        old_version = struct.unpack_from('<I', data, attr_pos + 16)[0]
+                        struct.pack_into('<I', data, attr_pos + 16, TARGET_VERSION_CODE)
+                        print(f"  Manifest: versionCode {old_version} -> {TARGET_VERSION_CODE}")
+                        version_code_patched = True
+                        break
+                break
+        if chunk_size == 0:
+            break
+        version_scan += chunk_size
+    if not version_code_patched:
+        raise SystemExit("Manifest versionCode attribute not found")
 
     # Sort <application> element attributes by resource ID.
     # Android's ApplyStyle() assumes XML attrs are in ascending resId order (like AAPT2
@@ -559,6 +676,8 @@ def main():
 
         with zipfile.ZipFile(OUT_APK, 'w', allowZip64=True) as zout:
             for name in names:
+                if name in RUNTIME_ASSETS:
+                    continue
                 if name == 'classes.dex':
                     zout.writestr('classes.dex', dex_patched,
                                   compress_type=zipfile.ZIP_STORED)
@@ -590,6 +709,13 @@ def main():
                     info = zin.getinfo(name)
                     data = zin.read(name)
                     zout.writestr(info, data)
+
+            for asset_name, source_path in RUNTIME_ASSETS.items():
+                with open(source_path, 'rb') as runtime_file:
+                    runtime_data = runtime_file.read()
+                zout.writestr(asset_name, runtime_data,
+                              compress_type=zipfile.ZIP_DEFLATED)
+                print(f"  ADDED    {asset_name} ({len(runtime_data)} bytes)")
 
             # Add virgl native libs (new entries, not in base APK)
             for virgl_lib in [
