@@ -69,6 +69,15 @@ Requirements:
 5. Keep the app open while the startup screen prepares the first session.
 6. Wait until the status changes to `Desktop ready` before using shortcuts.
 
+On Android 12 and newer, power users who run many Linux applications should
+enable **Developer options -> Disable child process restrictions** when that
+switch is available. Android otherwise monitors PRoot's Linux child processes
+as phantom processes and may terminate them under its process-count or CPU
+rules. This setting is recommended for heavier Chromium, WPS, development, and
+multi-session workloads; it is not required for a basic desktop session. See
+the [installation Wiki](https://github.com/dwiigoy/nobrain-linux/wiki/Installation-and-Updates#android-child-process-restrictions)
+for the ADB fallback, trade-offs, and recovery instructions.
+
 An in-place update signed by the same NoBrain release certificate preserves the
 Linux home directory and application data. Keep a backup before updating from
 unofficial or differently signed builds.
